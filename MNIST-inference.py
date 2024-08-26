@@ -40,7 +40,7 @@ class ConvNet(nn.Module):
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2))
         self.drop_out = nn.Dropout()
-        self.fc1 = nn.Linear(16 * 4 * 7 * 7, 1000)
+        self.fc1 = nn.Linear(64 * 7 * 7, 1000)
         self.fc2 = nn.Linear(1000, 10)
 
     def forward(self, x):
@@ -59,7 +59,7 @@ model = ConvNet()
 model.eval()
 
 ### Подгрузка обученной модели .pt
-model.load_state_dict(torch.load('/home/konstantinov/PycharmProjects/MNIST/output/mnist-custom_model2.pt'))
+model.load_state_dict(torch.load('/home/konstantinov/PycharmProjects/MNIST/output/mnist-custom_model1.pt'))
 
 with torch.no_grad():
     correct = 0

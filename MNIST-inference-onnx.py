@@ -38,7 +38,7 @@ with torch.no_grad():
 
         ### Зададим параметры инициализации onnx модели и откроем сессию onnxruntime с подгрузкой обученной модели onnx
         input = torch.randn(1, 1, 28, 28)
-        ort_sess = ort.InferenceSession('/home/konstantinov/PycharmProjects/MNIST/mnist-custom2.onnx')
+        ort_sess = ort.InferenceSession('/home/konstantinov/PycharmProjects/MNIST/mnist-custom1.onnx')
 
         ### Автоматизируем процесс присваивания ключей для словаря в цикле
         input_name = ort_sess.get_inputs()[0].name

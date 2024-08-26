@@ -16,7 +16,6 @@ import numpy as np
 # Просмотр обученных моделей (графов)
 # https://netron.app/
 
-
 # Hyperparameters
 num_epochs = 6
 num_classes = 10
@@ -38,7 +37,7 @@ test_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=False, transform
 train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
 test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
-# Neural network (two CNN layers with ReLU and maxpool2d, dropout, two FFNN layers)
+# Neural network (two CNN layers with ReLU and maxpool2d, dropout, two fc layers)
 class ConvNet(nn.Module):
     def __init__(self):
         super(ConvNet, self).__init__()
@@ -51,7 +50,7 @@ class ConvNet(nn.Module):
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2))
         self.drop_out = nn.Dropout()
-        self.fc1 = nn.Linear(16 * 4 * 7 * 7, 1000)
+        self.fc1 = nn.Linear(64 * 7 * 7, 1000)
         self.fc2 = nn.Linear(1000, 10)
 
     def forward(self, x):
@@ -102,7 +101,15 @@ model.eval()
 
 # Export the model into onnx
 torch_input = torch.randn(1, 1, 28, 28)
-torch.onnx.export(model, (torch_input,), 'mnist-custom2.onnx')
+torch.onnx.export(
+    model, # PyTorch model
+    (torch_input,), # Input data
+    "mnist-custom1.onnx", # Output ONNX file
+    input_names=["input"], # Names for the input
+    output_names=["output"], # Names for the output
+    dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
+    verbose=False # Optional: Verbose logging
+)
 
 with torch.no_grad():
     correct = 0
@@ -116,7 +123,7 @@ with torch.no_grad():
     print('Test Accuracy of the model on the 10000 test images: {} %'.format((correct / total) * 100))
 
 # Save the native model .pt
-torch.save(model.state_dict(),"output/mnist-custom_model2.pt")
+torch.save(model.state_dict(),"output/mnist-custom_model1.pt")
 
 # Plot for training process
 p = figure(y_axis_label='Loss', width=850, y_range=(0, 1), title='PyTorch ConvNet results')
