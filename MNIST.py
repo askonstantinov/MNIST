@@ -13,10 +13,9 @@ import numpy as np
 # https://neurohive.io/ru/tutorial/cnn-na-pytorch/
 # https://github.com/adventuresinML/adventures-in-ml-code/blob/master/conv_net_py_torch.py
 
-# Просмотр обученных моделей (графов)
-# https://netron.app/
+# Просмотр обученных моделей (графов) https://netron.app/
 
-# Hyperparameters
+# Hyperparameters for training
 num_epochs = 6
 num_classes = 10
 batch_size = 100
@@ -26,7 +25,7 @@ learning_rate = 0.001
 DATA_PATH = '/home/konstantinov/PycharmProjects/MNIST/mnist-data-path'
 MODEL_STORE_PATH = '/home/konstantinov/PycharmProjects/MNIST/model-store-path'
 
-# transforms to apply to the data
+# Transforms to apply to the data
 trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
 
 # MNIST dataset
@@ -80,7 +79,7 @@ for epoch in range(num_epochs):
         loss = criterion(outputs, labels)
         loss_list.append(loss.item())
 
-        # Backprop and perform Adam optimisation
+        # Backprop and perform Adam optimization
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -99,18 +98,6 @@ for epoch in range(num_epochs):
 # Test the model
 model.eval()
 
-# Export the model into onnx
-torch_input = torch.randn(1, 1, 28, 28)
-torch.onnx.export(
-    model, # PyTorch model
-    (torch_input,), # Input data
-    "mnist-custom1.onnx", # Output ONNX file
-    input_names=["input"], # Names for the input
-    output_names=["output"], # Names for the output
-    dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
-    verbose=False # Optional: Verbose logging
-)
-
 with torch.no_grad():
     correct = 0
     total = 0
@@ -122,8 +109,20 @@ with torch.no_grad():
 
     print('Test Accuracy of the model on the 10000 test images: {} %'.format((correct / total) * 100))
 
-# Save the native model .pt
-torch.save(model.state_dict(),"output/mnist-custom_model1.pt")
+# Save trained model into onnx
+torch_input = torch.randn(1, 1, 28, 28)
+torch.onnx.export(
+    model,  # PyTorch model
+    (torch_input,),  # Input data
+    'output_onnx/mnist-custom_1.onnx',  # Output ONNX file
+    input_names=['input'],  # Names for the input
+    output_names=['output'],  # Names for the output
+    dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}},
+    verbose=False  # Optional: Verbose logging
+)
+
+# Save trained model into .pt
+torch.save(model.state_dict(),'output_pt/mnist-custom_1.pt')
 
 # Plot for training process
 p = figure(y_axis_label='Loss', width=850, y_range=(0, 1), title='PyTorch ConvNet results')

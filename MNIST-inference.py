@@ -16,7 +16,7 @@ batch_size = 100
 DATA_PATH = '/home/konstantinov/PycharmProjects/MNIST/mnist-data-path'
 MODEL_STORE_PATH = '/home/konstantinov/PycharmProjects/MNIST/model-store-path'
 
-# transforms to apply to the data
+# Transforms to apply to the data
 trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
 
 # MNIST dataset
@@ -27,7 +27,7 @@ test_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=False, transform
 train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
 test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
-# Convolutional neural network (two convolutional layers)
+# Neural network (two CNN layers with ReLU and maxpool2d, dropout, two fc layers)
 class ConvNet(nn.Module):
     def __init__(self):
         super(ConvNet, self).__init__()
@@ -58,8 +58,8 @@ model = ConvNet()
 # Test the model
 model.eval()
 
-### Подгрузка обученной модели .pt
-model.load_state_dict(torch.load('/home/konstantinov/PycharmProjects/MNIST/output/mnist-custom_model1.pt'))
+# Load pt
+model.load_state_dict(torch.load('/home/konstantinov/PycharmProjects/MNIST/output_pt/mnist-custom_1.pt'))
 
 with torch.no_grad():
     correct = 0
@@ -69,20 +69,20 @@ with torch.no_grad():
         for i in range(0, len(images)):
             print('Проверочное значение, должна быть цифра =', int(labels[i]))
 
-            # НИЖЕ - СТАРТ ЗАМЕРА ВРЕМЕНИ
+            # СТАРТ ЗАМЕРА ВРЕМЕНИ
             start = datetime.datetime.now()
 
-            # НИЖЕ - ИНФЕРЕНС нативной модели .pt
+            # ИНФЕРЕНС модели pt
             outputs = model(images)
 
-            # НИЖЕ - КОНЕЦ ЗАМЕРА ВРЕМЕНИ
+            # КОНЕЦ ЗАМЕРА ВРЕМЕНИ
             finish = datetime.datetime.now()
 
-            ### Ниже отпечатываем результат инференса в каждой из 100 тест-пачек
+            # Вывод результата инференса в каждой из 100 тест-пачек
             print_outputs = outputs[i]
             print_max_outputs = np.argmax(print_outputs)
             print('Результат инференса: получена цифра =', print_max_outputs.item())
-            print('Затраты времени на отработку инференса (например, 0:00:00.000118 это 118 мкс): ' + str(finish - start))
+            print('Затраты времени на отработку инференса (например, 0:00:00.000123 это 123 мкс): ' + str(finish - start))
             print('--------------------')
             print('Порядковый номер проверенной картинки в текущей пачке (всего 100 картинок) =', i+1)
             print('--------------------')

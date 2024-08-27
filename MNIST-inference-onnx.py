@@ -18,7 +18,7 @@ batch_size = 100
 DATA_PATH = '/home/konstantinov/PycharmProjects/MNIST/mnist-data-path'
 MODEL_STORE_PATH = '/home/konstantinov/PycharmProjects/MNIST/model-store-path'
 
-# transforms to apply to the data
+# Transforms to apply to the data
 trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
 
 # MNIST dataset
@@ -33,36 +33,40 @@ with torch.no_grad():
     total = 0
     for images, labels in test_loader:
 
-        ### Объявим пустой tupple для наполнения в цикле
+        # Объявление пустого tupple для наполнения в цикле
         out_t = ()
 
-        ### Зададим параметры инициализации onnx модели и откроем сессию onnxruntime с подгрузкой обученной модели onnx
+        # Инициализация onnx 
         input = torch.randn(1, 1, 28, 28)
-        ort_sess = ort.InferenceSession('/home/konstantinov/PycharmProjects/MNIST/mnist-custom1.onnx')
+        # Начало сессии onnxruntime
+        #onnx_model_path = '/home/konstantinov/PycharmProjects/MNIST/output_onnx/mnist-custom_1.onnx'
+        onnx_model_path = '/home/konstantinov/PycharmProjects/MNIST/external_onnx/mnist.onnx'
+        ort_sess = ort.InferenceSession(onnx_model_path)
 
-        ### Автоматизируем процесс присваивания ключей для словаря в цикле
+        # Автоматизация процесса присваивания ключей для словаря в цикле
         input_name = ort_sess.get_inputs()[0].name
 
         for i in range(0, len(images)):
             print('Проверочное значение, должна быть цифра =', int(labels[i]))
 
-            # НИЖЕ - ПРИВЕДЕНИЕ КО ВХОДУ onnxruntime
+            # ПРИВЕДЕНИЕ КО ВХОДУ onnxruntime
             k = images[i,:,:]
             z = np.array(k)
             j = np.expand_dims(z, axis=0)
 
-            # НИЖЕ - СТАРТ ЗАМЕРА ВРЕМЕНИ
+            # СТАРТ ЗАМЕРА ВРЕМЕНИ
             start = datetime.datetime.now()
 
-            # НИЖЕ - ИНФЕРЕНС модели onnx силами onnxruntime
+            # ИНФЕРЕНС модели onnx
             outputs = ort_sess.run(None, {input_name: j})
 
-            # НИЖЕ - КОНЕЦ ЗАМЕРА ВРЕМЕНИ
+            # КОНЕЦ ЗАМЕРА ВРЕМЕНИ
             finish = datetime.datetime.now()
 
+            # Вывод результата инференса в каждой из 100 тест-пачек
             outputs_array = outputs[0][0]
             print('Результат инференса: получена цифра =', np.argmax(outputs_array))
-            print('Затраты времени на отработку инференса (например, 0:00:00.000118 это 118 мкс): ' + str(finish - start))
+            print('Затраты времени на отработку инференса (например, 0:00:00.000123 это 123 мкс): ' + str(finish - start))
             print('--------------------')
             print('Порядковый номер проверенной картинки в текущей пачке (всего 100 картинок) =', i+1)
             print('--------------------')
