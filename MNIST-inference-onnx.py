@@ -15,8 +15,8 @@ import onnxruntime as ort
 batch_size = 100
 
 # Specific for MNIST integrated into PyTorch
-DATA_PATH = '/home/konstantinov/PycharmProjects/MNIST/mnist-data-path'
-MODEL_STORE_PATH = '/home/konstantinov/PycharmProjects/MNIST/model-store-path'
+DATA_PATH = 'mnist-data-path'
+MODEL_STORE_PATH = 'model-store-path'
 
 # Transforms to apply to the data
 trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
@@ -39,8 +39,8 @@ with torch.no_grad():
         # Инициализация onnx 
         input = torch.randn(1, 1, 28, 28)
         # Начало сессии onnxruntime
-        #onnx_model_path = '/home/konstantinov/PycharmProjects/MNIST/output_onnx/mnist-custom_1.onnx'
-        onnx_model_path = '/home/konstantinov/PycharmProjects/MNIST/external_onnx/mnist.onnx'
+        onnx_model_path = 'output_onnx/mnist-custom_1.onnx'
+        #onnx_model_path = 'external_onnx/mnist.onnx'
         ort_sess = ort.InferenceSession(onnx_model_path)
 
         # Автоматизация процесса присваивания ключей для словаря в цикле

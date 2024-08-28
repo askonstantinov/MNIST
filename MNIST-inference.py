@@ -13,8 +13,8 @@ import datetime
 batch_size = 100
 
 # Specific for MNIST integrated into PyTorch
-DATA_PATH = '/home/konstantinov/PycharmProjects/MNIST/mnist-data-path'
-MODEL_STORE_PATH = '/home/konstantinov/PycharmProjects/MNIST/model-store-path'
+DATA_PATH = 'mnist-data-path'
+MODEL_STORE_PATH = 'model-store-path'
 
 # Transforms to apply to the data
 trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
@@ -59,7 +59,7 @@ model = ConvNet()
 model.eval()
 
 # Load pt
-model.load_state_dict(torch.load('/home/konstantinov/PycharmProjects/MNIST/output_pt/mnist-custom_1.pt'))
+model.load_state_dict(torch.load('output_pt/mnist-custom_1.pt'))
 
 with torch.no_grad():
     correct = 0

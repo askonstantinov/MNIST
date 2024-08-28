@@ -23,8 +23,8 @@ import onnxruntime as ort
 # Просмотр обученных моделей (графов) https://netron.app/
 
 # Load onnx
-#onnx_model_path = '/home/konstantinov/PycharmProjects/MNIST/output_onnx/mnist-custom_1.onnx'
-onnx_model_path = '/home/konstantinov/PycharmProjects/MNIST/external_onnx/mnist.onnx'
+onnx_model_path = 'output_onnx/mnist-custom_1.onnx'
+#onnx_model_path = 'external_onnx/mnist.onnx'
 onnx_model = onnx.load(onnx_model_path)
 
 # Extract parameters from onnx into pytorch
@@ -38,8 +38,8 @@ batch_size = 100
 learning_rate = 0.001
 
 # Specific for MNIST integrated into PyTorch
-DATA_PATH = '/home/konstantinov/PycharmProjects/MNIST/mnist-data-path'
-MODEL_STORE_PATH = '/home/konstantinov/PycharmProjects/MNIST/model-store-path'
+DATA_PATH = 'mnist-data-path'
+MODEL_STORE_PATH = 'model-store-path'
 
 # Transforms to apply to the data
 trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])

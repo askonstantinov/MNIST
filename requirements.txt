@@ -1,0 +1,8 @@
+bokeh == 3.5.2
+datetime == 5.5
+numpy == 2.1.0
+onnx == 1.16.2
+onnx2torch == 1.5.15
+onnxruntime == 1.19.0
+torch == 2.4.0
+torchvision == 0.19.0

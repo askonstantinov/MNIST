@@ -22,8 +22,8 @@ batch_size = 100
 learning_rate = 0.001
 
 # Specific for MNIST integrated into PyTorch
-DATA_PATH = '/home/konstantinov/PycharmProjects/MNIST/mnist-data-path'
-MODEL_STORE_PATH = '/home/konstantinov/PycharmProjects/MNIST/model-store-path'
+DATA_PATH = 'mnist-data-path'
+MODEL_STORE_PATH = 'model-store-path'
 
 # Transforms to apply to the data
 trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
