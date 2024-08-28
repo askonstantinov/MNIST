@@ -9,6 +9,11 @@ from bokeh.models import LinearAxis, Range1d
 import numpy as np
 
 
+# Перед первым запуском - убедитесь, что создана виртуальная среда (например, conda).
+# Установите в среду все необходимое командой
+# pip install -r requirements.txt
+# Не забудьте активировать подготовленную среду!
+
 # Скрипт на основе
 # https://neurohive.io/ru/tutorial/cnn-na-pytorch/
 # https://github.com/adventuresinML/adventures-in-ml-code/blob/master/conv_net_py_torch.py
