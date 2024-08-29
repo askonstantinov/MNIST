@@ -26,6 +26,7 @@ nvidia-nvtx-cu12 == 12.1.105
 onnx == 1.16.2
 onnx2torch == 1.5.15
 onnxruntime == 1.19.0
+optuna == 3.6.1
 packaging == 24.1
 pandas == 2.2.2
 pillow == 10.4.0
