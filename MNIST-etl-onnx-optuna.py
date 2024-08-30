@@ -20,6 +20,8 @@ import math
 def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_optuna):
     # Range of hyperparameters to choose from Optuna
     learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-3, log=True)
+    # Нужно учесть, что возможны случаи batch_size > total_step
+    # тогда обучение будет вестись как batch_size = total_step
     batch_size = trial.suggest_int('batch_size', 128, 512)
     # Fixed hyperparameters needed for training
     num_epochs = number_epochs_optuna
