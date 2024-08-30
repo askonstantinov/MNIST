@@ -32,8 +32,7 @@ torch_model = convert(onnx_model)
 model = torch_model
 
 # Hyperparameters for training
-num_epochs = 30
-num_classes = 10
+num_epochs = 2
 batch_size = 100
 learning_rate = 0.001
 
