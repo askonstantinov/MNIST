@@ -163,15 +163,15 @@ for epoch in range(numepochs):
 
         if batch_size >= total_step and (i + 1) == total_step:
             print(
-                'Optuna Train Epoch [{}/{}], Step [{}/{}], SUPER Batch = Total steps [{}], Loss: {:.4f}, Accuracy: {:.2f}%'
+                'Train Epoch [{}/{}], Step [{}/{}], SUPER Batch = Total steps [{}], Loss: {:.4f}, Accuracy: {:.2f}%'
                 .format(epoch + 1, numepochs, i + 1, total_step,
                         total_step, loss.item(), (correct / total) * 100))
         elif (i + 1) % batch_size == 0:
-            print('Optuna Train Epoch [{}/{}], Step [{}/{}], Batch [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
+            print('Train Epoch [{}/{}], Step [{}/{}], Batch [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
                   .format(epoch + 1, numepochs, i + 1, total_step, int((i + 1) / batch_size),
                           math.ceil(total_step / batch_size), loss.item(), (correct / total) * 100))
         elif (i + 1) == total_step:
-            print('Optuna Train Epoch [{}/{}], Step [{}/{}], RESIDUAL Batch [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
+            print('Train Epoch [{}/{}], Step [{}/{}], RESIDUAL Batch [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
                   .format(epoch + 1, numepochs, i + 1, total_step, (int((i + 1) / batch_size)) + 1,
                           math.ceil(total_step / batch_size), loss.item(), (correct / total) * 100))
 
