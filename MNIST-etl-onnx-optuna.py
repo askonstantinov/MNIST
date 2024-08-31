@@ -16,18 +16,24 @@ import optuna
 import math
 
 
+# Проверка доступности GPU
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#device = torch.device("cpu")
+print(f"Используемое устройство: {device}")
+
 # Целевая функция Optuna
 def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_optuna):
     # Range of hyperparameters to choose from Optuna
-    learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-3, log=True)
+    learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
     # Нужно учесть, что возможны случаи batch_size > total_step
     # тогда обучение будет вестись как batch_size = total_step
-    batch_size = trial.suggest_int('batch_size', 128, 512)
+    batch_size = trial.suggest_int('batch_size', 64, 64)
     # Fixed hyperparameters needed for training
     num_epochs = number_epochs_optuna
 
     # Создание модели
     model = convert(onnx.load(path_to_onnx_model_optuna))  # Загрузка модели из ONNX
+    model.to(device)  # Перенос модели на устройство GPU
 
     # Определение оптимизатора
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -53,6 +59,10 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
     acc_list = []
     for epoch in range(num_epochs):
         for i, (images, labels) in enumerate(train_loader):
+
+            images = images.to(device)  # Перенос данных на устройство GPU
+            labels = labels.to(device)  # Перенос меток на устройство GPU
+
             # Запуск прямого прохода
             outputs = model(images)
             loss = criterion(outputs, labels)
@@ -88,6 +98,10 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
         correct = 0
         total = 0
         for images, labels in test_loader:
+
+            images = images.to(device)  # Перенос данных на устройство GPU
+            labels = labels.to(device)  # Перенос меток на устройство GPU
+
             outputs = model(images)
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
@@ -99,25 +113,31 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
     return accuracy
 
 # Ввод значений параметров и запуск Optuna
-onnxpath = 'output_onnx/mnist-custom_2.onnx'
-numepochs_optuna = 2
+onnxpath = 'output_onnx/mnist-custom_1.onnx'
+number_epochs_optuna = 4
 # Loss
 criterion = nn.CrossEntropyLoss()
 
-study = optuna.create_study(direction='maximize')
-study.optimize(lambda trial: objective(trial, onnxpath, numepochs_optuna, criterion), n_trials=10)  # желательно задавать >100 trials
+study = optuna.create_study(sampler=optuna.samplers.TPESampler(n_startup_trials=10),
+                            pruner=optuna.pruners.MedianPruner(n_startup_trials=10),
+                            direction='maximize')
+study.optimize(lambda trial: objective(trial, onnxpath, number_epochs_optuna, criterion),
+               n_trials=101)  # желательно задавать >100 trials
 
 # Вывод результатов
 print(f"Лучшая точность: {study.best_value}")
 print(f"Лучшие параметры: {study.best_params}")
+print(f"Количество обрезанных (pruned) trials: {len(study.get_trials(deepcopy=False, states=[optuna.trial.TrialState.PRUNED]))}")
 
 # Обучение модели с лучшими параметрами
 # Ввод определенных Optuna лучших параметров
 best_params = study.best_params
 learning_rate = best_params['learning_rate']
 batch_size = best_params['batch_size']
+
 # Ввод прочих параметров
-numepochs = 3
+numepochs = 4
+
 # Подгрузка исходной модели onnx
 onnx_model = onnx.load(onnxpath)
 # Формирование массивов данных MNIST
@@ -136,6 +156,8 @@ test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=Fa
 # Extract parameters from onnx into pytorch
 torch_model = convert(onnx_model)
 model = torch_model
+model = model.to(device) # Перенос модели на устройство GPU
+
 # Определение оптимизатора
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -145,6 +167,10 @@ loss_list = []
 acc_list = []
 for epoch in range(numepochs):
     for i, (images, labels) in enumerate(train_loader):
+
+        images = images.to(device)  # Перенос данных на устройство
+        labels = labels.to(device)  # Перенос меток на устройство
+
         # Run the forward pass
         outputs = model(images)
         loss = criterion(outputs, labels)
@@ -182,6 +208,10 @@ with torch.no_grad():
     correct = 0
     total = 0
     for images, labels in test_loader:
+
+        images = images.to(device)  # Перенос данных на устройство GPU
+        labels = labels.to(device)  # Перенос меток на устройство GPU
+
         outputs = model(images)
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
@@ -190,7 +220,7 @@ with torch.no_grad():
     print('Test Accuracy of the model on the 10000 test images: {} %'.format((correct / total) * 100))
 
 # Save trained model into onnx
-torch_input = torch.randn(1, 1, 28, 28)
+torch_input = torch.randn(1, 1, 28, 28, device=device)
 torch.onnx.export(
     model,  # PyTorch model
     (torch_input,),  # Input data
@@ -208,9 +238,3 @@ p.add_layout(LinearAxis(y_range_name='Accuracy', axis_label='Accuracy (%)'), 'ri
 p.line(np.arange(len(loss_list)), loss_list)
 p.line(np.arange(len(loss_list)), np.array(acc_list) * 100, y_range_name='Accuracy', color='red')
 show(p)
-
-# Правильная настройка параметров TPE:
-# >> Настройте "gamma" parameter: Этот параметр определяет, насколько агрессивно TPE "эксплуатирует" известные
-# хорошие области пространства поиска. Попробуйте различные значения, чтобы найти оптимальное для вашей задачи.
-# >> Установите "n_startup_trials" параметр: Этот параметр определяет количество начальных попыток, которые используются
-# для построения модели. Увеличьте это значение, если пространство поиска велико или целевая функция сложна.
