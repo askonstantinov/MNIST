@@ -21,6 +21,83 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #device = torch.device("cpu")
 print(f"Используемое устройство: {device}")
 
+# Суть Optuna в том, чтобы применить smart подход (вместо грубых эвристик)
+# и автоматизировать процесс поиска наилучшей комбинации гиперпараметров. Типы гиперпараметров:
+# 1) ГП модели: включают параметры, определяющие архитектуру модели, например, количество скрытых слоев;
+# 2) ГП оптимизации: к ним относятся параметры, управляющие процессом оптимизации, например, скорость обучения;
+# 3) ГП регуляризации: имеют отношение, например, к коэффициенту dropout, а также настройкам L1 / L2 регуляризации.
+
+# 1) Перечень:
+
+
+# 2) Перечень:
+
+# Выбор оптимизатора градиентного спуска. Для каждого разный набор ГП. Список оптимизаторов torch:
+# adadelta
+# adagrad
+# adam
+# adamw
+# sparse_adam
+# adamax
+# asgd
+# sgd
+# radam
+# rprop
+# rmsprop
+# nadam
+# lbfgs
+
+# Для популярного оптимизатора градиентного спуска ADAM из библиотеки torch список ГП:
+# lr: Union[float, Tensor] = 1e-3
+# betas: Tuple[float, float] = (0.9, 0.999)
+# eps: float = 1e-8
+# weight_decay: float = 0
+# amsgrad: bool = False
+# foreach: Optional[bool] = None
+# maximize: bool = False
+# capturable: bool = False
+# differentiable: bool = False
+# fused: Optional[bool] = None
+
+# К общим ГП можно отнести:
+# количество эпох (полных проходов по всем обучающим данным),
+# размер пачки (batch_size),
+# loss функция.
+
+# Список loss функций torch:
+# 'L1Loss'
+# 'NLLLoss'
+# 'NLLLoss2d'
+# 'PoissonNLLLoss'
+# 'GaussianNLLLoss'
+# 'KLDivLoss'
+# 'MSELoss'
+# 'BCELoss'
+# 'BCEWithLogitsLoss'
+# 'HingeEmbeddingLoss'
+# 'MultiLabelMarginLoss'
+# 'SmoothL1Loss'
+# 'HuberLoss'
+# 'SoftMarginLoss'
+# 'CrossEntropyLoss'
+# 'MultiLabelSoftMarginLoss'
+# 'CosineEmbeddingLoss'
+# 'MarginRankingLoss'
+# 'MultiMarginLoss'
+# 'TripletMarginLoss'
+# 'TripletMarginWithDistanceLoss'
+# 'CTCLoss'
+
+# 3) Перечень:
+
+
+# Просто загнать все возможные ГП и все значения - плохая идея.
+# Следует хоть примерно представлять, какие ГП важны и какие разумные диапазоны значений.
+# Всегда следует помнить о том, что, помимо ГП, можно "поработать" еще с  dataset (например, Data Augmentation),
+# поменять настройки самой Optuna, либо вообще переработать постановку задачи.
+# В любом случае эффективное применение Optuna связано с огромным объемом вычислений, почти все из которых
+# дадут результаты, подлежащие отсеиванию. Поэтому не рекомендуется делать всё на одном вычислителе.
+
 # Целевая функция Optuna
 def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_optuna):
     # Range of hyperparameters to choose from Optuna
