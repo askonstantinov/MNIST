@@ -21,21 +21,128 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #device = torch.device("cpu")
 print(f"Используемое устройство: {device}")
 
-# Суть Optuna в том, чтобы применить smart подход (вместо грубых эвристик)
-# и автоматизировать процесс поиска наилучшей комбинации гиперпараметров. Типы гиперпараметров:
+# Суть Optuna в том, чтобы применить smart подход (вместо грубых эвристик) и автоматизировать процесс поиска
+# наилучшей комбинации гиперпараметров (ГП). Поэтому важно представлять полный набор ГП.
+# Типы гиперпараметров:
 # 1) ГП модели: включают параметры, определяющие архитектуру модели, например, количество скрытых слоев;
 # 2) ГП оптимизации: к ним относятся параметры, управляющие процессом оптимизации, например, скорость обучения;
 # 3) ГП регуляризации: имеют отношение, например, к коэффициенту dropout, а также настройкам L1 / L2 регуляризации.
 
-# 1) Перечень:
+################################################ 1) Перечень:
 
+# Тип слоя, его положение, количество нейронов,
+# Количество слоев,
+# Функция активации и ее положение.
 
-# 2) Перечень:
+# Согласно библиотеке torch доступны следующие слои:
+# 'Bilinear'
+# 'Identity'
+# 'LazyLinear'
+# 'Linear'  # Используется
+# 'Conv1d'
+# 'Conv2d'  # Используется
+# 'Conv3d'
+# 'ConvTranspose1d'
+# 'ConvTranspose2d'
+# 'ConvTranspose3d'
+# 'LazyConv1d'
+# 'LazyConv2d'
+# 'LazyConv3d'
+# 'LazyConvTranspose1d'
+# 'LazyConvTranspose2d'
+# 'LazyConvTranspose3d'
+# 'RNNBase'
+# 'RNN'
+# 'LSTM'
+# 'GRU'
+# 'RNNCellBase'
+# 'RNNCell'
+# 'LSTMCell'
+# 'GRUCell'
+# 'Transformer'
+# 'TransformerEncoder'
+# 'TransformerDecoder'
+# 'TransformerEncoderLayer'
+# 'TransformerDecoderLayer'
+#
+# Для используемого слоя 'Conv2d' доступны следующие настройки:
+# in_channels (int): Number of channels in the input image
+# out_channels (int): Number of channels produced by the convolution
+# kernel_size (int or tuple): Size of the convolving kernel
+# stride (int or tuple, optional): Stride of the convolution. Default: 1
+# padding (int, tuple or str, optional): Padding added to all four sides of the input. Default: 0
+# padding_mode (str, optional): ``'zeros'``, ``'reflect'``, ``'replicate'`` or ``'circular'``. Default: ``'zeros'``
+# dilation (int or tuple, optional): Spacing between kernel elements. Default: 1
+# groups (int, optional): Number of blocked connections from input channels to output channels. Default: 1
+# bias (bool, optional): If ``True``, adds a learnable bias to the output. Default: ``True``
+#
+# Кроме того, для 'Conv2d' доступны вспомогательные слои пулинга. Список torch:
+# 'MaxPool1d'
+# 'MaxPool2d'  # Используется
+# 'MaxPool3d'
+# 'MaxUnpool1d'
+# 'MaxUnpool2d'
+# 'MaxUnpool3d'
+# 'AvgPool1d'
+# 'AvgPool2d'
+# 'AvgPool3d'
+# 'FractionalMaxPool2d'
+# 'FractionalMaxPool3d'
+# 'LPPool1d'
+# 'LPPool2d'
+# 'LPPool3d'
+# 'AdaptiveMaxPool1d'
+# 'AdaptiveMaxPool2d'
+# 'AdaptiveMaxPool3d'
+# 'AdaptiveAvgPool1d'
+# 'AdaptiveAvgPool2d'
+# 'AdaptiveAvgPool3d'
+#
+# Для используемого 'MaxPool2d' доступны настройки:
+# kernel_size: the size of the window to take a max over
+# stride: the stride of the window. Default value is :attr:`kernel_size`
+# padding: Implicit negative infinity padding to be added on both sides
+# dilation: a parameter that controls the stride of elements in the window
+# return_indices: if ``True``, will return the max indices along with the outputs
+# ceil_mode: when True, will use `ceil` instead of `floor` to compute the output shape
+#
+# Список функций активации torch:
+# 'Threshold'
+# 'ReLU'  # Используется
+# 'RReLU'
+# 'Hardtanh'
+# 'ReLU6'
+# 'Sigmoid'
+# 'Hardsigmoid'
+# 'Tanh'
+# 'SiLU'
+# 'Mish'
+# 'Hardswish'
+# 'ELU'
+# 'CELU'
+# 'SELU'
+# 'GLU'
+# 'GELU'
+# 'Hardshrink'
+# 'LeakyReLU'
+# 'LogSigmoid'
+# 'Softplus'
+# 'Softshrink'
+# 'MultiheadAttention'
+# 'PReLU'
+# 'Softsign'
+# 'Tanhshrink'
+# 'Softmin'
+# 'Softmax'
+# 'Softmax2d'
+# 'LogSoftmax'
+
+################################################ 2) Перечень:
 
 # Выбор оптимизатора градиентного спуска. Для каждого разный набор ГП. Список оптимизаторов torch:
 # adadelta
 # adagrad
-# adam
+# adam  # Используется
 # adamw
 # sparse_adam
 # adamax
@@ -47,7 +154,7 @@ print(f"Используемое устройство: {device}")
 # nadam
 # lbfgs
 
-# Для популярного оптимизатора градиентного спуска ADAM из библиотеки torch список ГП:
+# Для используемого оптимизатора adam список ГП:
 # lr: Union[float, Tensor] = 1e-3
 # betas: Tuple[float, float] = (0.9, 0.999)
 # eps: float = 1e-8
@@ -61,7 +168,7 @@ print(f"Используемое устройство: {device}")
 
 # К общим ГП можно отнести:
 # количество эпох (полных проходов по всем обучающим данным),
-# размер пачки (batch_size),
+# размер пачки (batch_size) и батч-нормализация,
 # loss функция.
 
 # Список loss функций torch:
@@ -79,7 +186,7 @@ print(f"Используемое устройство: {device}")
 # 'SmoothL1Loss'
 # 'HuberLoss'
 # 'SoftMarginLoss'
-# 'CrossEntropyLoss'
+# 'CrossEntropyLoss'  # Используется
 # 'MultiLabelSoftMarginLoss'
 # 'CosineEmbeddingLoss'
 # 'MarginRankingLoss'
@@ -88,7 +195,28 @@ print(f"Используемое устройство: {device}")
 # 'TripletMarginWithDistanceLoss'
 # 'CTCLoss'
 
-# 3) Перечень:
+# Список вариантов батч-нормализации:
+# 'BatchNorm1d'
+# 'LazyBatchNorm1d'
+# 'BatchNorm2d'  # обычно используется
+# 'LazyBatchNorm2d'
+# 'BatchNorm3d'
+# 'LazyBatchNorm3d'
+# 'SyncBatchNorm'
+
+# Для 'BatchNorm2d' список настроек:
+# num_features: :math:`C` from an expected input of size :math:`(N, C, H, W)`
+# eps: a value added to the denominator for numerical stability. Default: 1e-5
+# momentum: the value used for the running_mean and running_var computation. Can be set to ``None`` for cumulative
+    # moving average (i.e. simple average). Default: 0.1
+# affine: a boolean value that when set to ``True``, this module has learnable affine parameters. Default: ``True``
+# track_running_stats: a boolean value that when set to ``True``, this module tracks the running mean and variance,
+    # and when set to ``False``, this module does not track such statistics, and initializes statistics buffers :attr:
+    # running_mean` and :attr:`running_var` as ``None``. When these buffers are ``None``, this module always
+    # uses batch statistics in both training and eval modes. Default: ``True``
+
+################################################ 3) Перечень:
+
 
 
 # Просто загнать все возможные ГП и все значения - плохая идея.
