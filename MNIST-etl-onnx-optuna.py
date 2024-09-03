@@ -235,9 +235,9 @@ print(f"Используемое устройство: {device}")
 ################################################################################################
 
 # Просто загнать все возможные ГП и все значения - плохая идея.
-# Следует хоть примерно представлять, какие ГП важны и какие разумные диапазоны значений.
-# Всегда следует помнить о том, что, помимо ГП, можно "поработать" еще с  dataset (Data Augmentation, нормализация etc),
-# поменять настройки самой Optuna (sampler, pruner, number of trials etc), либо вообще переработать постановку задачи.
+# Следует примерно представлять, какие ГП важны, а также разумные диапазоны значений.
+# Помимо ГП, можно поработать с  dataset (Data Augmentation, нормализация etc),
+# поменять настройки Optuna (sampler, pruner, number of trials etc), либо изменить постановку задачи.
 
 # В любом случае эффективное применение Optuna связано с огромным объемом вычислений, почти все из которых
 # дадут результаты, подлежащие отсеиванию. Поэтому не рекомендуется делать всё на одном вычислителе.
@@ -248,14 +248,83 @@ print(f"Используемое устройство: {device}")
 def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_optuna):
     # Range of hyperparameters to choose from Optuna
     learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
+
+    layer1_conv2d_filter = trial.suggest_int('layer1_conv2d_filter', 1, 128)
+    layer1_conv2d_kernel = trial.suggest_int('layer1_conv2d_kernel', 1, 25)
+    layer1_conv2d_stride = trial.suggest_int('layer1_conv2d_stride', 1, 7)
+    layer1_conv2d_padding = trial.suggest_int('layer1_conv2d_padding', 2, 14)
+    layer1_maxpool2d_kernel = trial.suggest_int('layer1_maxpool2d_kernel', 1, 25)
+    layer1_maxpool2d_stride = trial.suggest_int('layer1_maxpool2d_stride', 1, 7)
+    layer1_maxpool2d_padding = trial.suggest_int('layer1_maxpool2d_padding', 2, 14)
+
+    layer2_conv2d_filter = trial.suggest_int('layer2_conv2d_filter', 1, 128)
+    layer2_conv2d_kernel = trial.suggest_int('layer2_conv2d_kernel', 1, 25)
+    layer2_conv2d_stride = trial.suggest_int('layer2_conv2d_stride', 1, 7)
+    layer2_conv2d_padding = trial.suggest_int('layer2_conv2d_padding', 2, 14)
+    layer2_maxpool2d_kernel = trial.suggest_int('layer2_maxpool2d_kernel', 1, 25)
+    layer2_maxpool2d_stride = trial.suggest_int('layer2_maxpool2d_stride', 1, 7)
+    layer2_maxpool2d_padding = trial.suggest_int('layer2_maxpool2d_padding', 2, 14)
+
+    layer3_fc1_neurons = trial.suggest_int('layer3_fc1_neurons', 1, 4000)
+
+    layer4_fc2_neurons = trial.suggest_int('layer4_fc2_neurons', 1, 2000)
+
     # Нужно учесть, что возможны случаи batch_size > total_step
     # тогда обучение будет вестись как batch_size = total_step
-    batch_size = trial.suggest_int('batch_size', 64, 64)
+    batch_size = trial.suggest_int('batch_size', 32, 256)
+
     # Fixed hyperparameters needed for training
     num_epochs = number_epochs_optuna
 
     # Создание модели
-    model = convert(onnx.load(path_to_onnx_model_optuna))  # Загрузка модели из ONNX
+    onnx_model1 = onnx.load(path_to_onnx_model_optuna)  # Загрузка модели из ONNX
+
+    # Получение графа модели
+    onnx_graph = onnx_model1.graph
+
+    # Нахождение узлов (нод) для подмены значений ГП в ходе перебора
+    conv_node1 = None
+    maxpool_node1 = None
+    conv_node2 = None
+    maxpool_node2 = None
+    fc_1 = None
+    fc_2 = None
+
+    for node in onnx_graph.node:
+        if node.op_type == "Conv":
+            if node.name == "/layer1/layer1.0/Conv":
+                conv_node1 = node
+            elif node.name == "/layer1/layer2.0/Conv":
+                conv_node2 = node
+        elif node.op_type == "MaxPool":
+            if node.name == "/layer1/layer1.2/MaxPool":
+                maxpool_node1 = node
+            if node.name == "/layer1/layer2.2/MaxPool":
+                maxpool_node2 = node
+        elif node.op_type == "fc_1":
+            fc_1 = node
+        elif node.op_type == "fc_2":
+            fc_2 = node
+
+    # Изменение параметров слоя 1 (conv)
+    if conv_node1 is not None:
+        if name == "main_graph":
+            initializer.dims = layer1_conv2d_filter
+        conv_node1.attribute[0].ints[0] = layer1_conv2d_filter  # filter size
+        conv_node1.attribute[2].ints[0] = layer1_conv2d_kernel  # kernel size
+
+    # Изменение параметров слоя 1 (pooling)
+    if maxpool_node1 is not None:
+        # Новые значения параметров из Optuna для слоя 1 (pooling)
+        layer1_maxpool2d_kernel = trial.suggest_int('layer1_maxpool2d_kernel', 1, 25)
+        layer1_maxpool2d_stride = trial.suggest_int('layer1_maxpool2d_stride', 1, 7)
+
+        # Изменение атрибутов слоя 1 (pooling)
+        maxpool_node1.attribute[0].ints[0] = layer1_maxpool2d_kernel  # kernel size
+        maxpool_node1.attribute[1].ints[0] = layer1_maxpool2d_stride  # stride
+
+    onnx_model2 = onnx_model1
+    model = convert(onnx_model2)
     model.to(device)  # Перенос модели на устройство GPU
 
     # Определение оптимизатора
