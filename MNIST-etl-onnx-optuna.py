@@ -29,6 +29,8 @@ print(f"Используемое устройство: {device}")
 # 1) ГП модели: включают параметры, определяющие архитектуру модели, например, количество скрытых слоев;
 # 2) ГП оптимизации: к ним относятся параметры, управляющие процессом оптимизации, например, скорость обучения;
 # 3) ГП регуляризации: имеют отношение, например, к коэффициенту dropout, а также настройкам L1 / L2 регуляризации.
+    # Важное - L1 регуляризация (L1 penalty, Lasso) в torch не представлена
+    # Важное - L2 регуляризация (L2 penalty, Ridge) в torch задается в настройках оптимизатора как weight_decay
 
 ################################################ 1) Перечень:
 
@@ -157,16 +159,15 @@ print(f"Используемое устройство: {device}")
 # lbfgs
 
 # Для используемого оптимизатора adam список ГП:
-# lr: Union[float, Tensor] = 1e-3
-# betas: Tuple[float, float] = (0.9, 0.999)
-# eps: float = 1e-8
-# weight_decay: float = 0
-# amsgrad: bool = False
-# foreach: Optional[bool] = None
-# maximize: bool = False
-# capturable: bool = False
-# differentiable: bool = False
-# fused: Optional[bool] = None
+# params (iterable): iterable of parameters to optimize or dicts defining parameter groups
+# lr (float, Tensor, optional): learning rate (default: 1e-3). A tensor LR is not yet supported for all our
+    # implementations. Please use a float LR if you are not also specifying fused=True or capturable=True.
+# betas (Tuple[float, float], optional): coefficients used for computing running averages of gradient
+    # and its square (default: (0.9, 0.999))
+# eps (float, optional): term added to the denominator to improve numerical stability (default: 1e-8)
+# weight_decay (float, optional): weight decay (L2 penalty) (default: 0)
+# amsgrad (bool, optional): whether to use the AMSGrad variant of this algorithm from the paper
+    # `On the Convergence of Adam and Beyond`_ (default: False)
 
 # К общим ГП можно отнести:
 # количество эпох (полных проходов по всем обучающим данным),
@@ -200,7 +201,7 @@ print(f"Используемое устройство: {device}")
 # Список вариантов батч-нормализации:
 # 'BatchNorm1d'
 # 'LazyBatchNorm1d'
-# 'BatchNorm2d'  # обычно используется
+# 'BatchNorm2d'
 # 'LazyBatchNorm2d'
 # 'BatchNorm3d'
 # 'LazyBatchNorm3d'
@@ -219,8 +220,19 @@ print(f"Используемое устройство: {device}")
 
 ################################################ 3) Перечень:
 
+# Регуляризация с использованием слоя dropout - список torch:
+# 'Dropout'  # Используется
+# 'Dropout1d'
+# 'Dropout2d'
+# 'Dropout3d'
+# 'AlphaDropout'
+# 'FeatureAlphaDropout'
 
+# Для 'Dropout' список настроек:
+# p: probability of an element to be zeroed. Default: 0.5
+# inplace: If set to ``True``, will do this operation in-place. Default: ``False``
 
+################################################################################################
 
 # Просто загнать все возможные ГП и все значения - плохая идея.
 # Следует хоть примерно представлять, какие ГП важны и какие разумные диапазоны значений.
