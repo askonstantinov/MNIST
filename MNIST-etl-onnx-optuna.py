@@ -355,7 +355,7 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
                 nn.ReLU(),
                 nn.MaxPool2d(kernel_size=layer2_maxpool2d_kernel, stride=layer2_maxpool2d_stride))
             self.drop_out = nn.Dropout(p=layer23_dropout)
-            self.fc1 = nn.Linear(layer2_conv2d_filter * 7 * 7, layer4_fc2_neurons)
+            self.fc1 = nn.Linear(layer2_conv2d_filter * (layer1_conv2d_kernel + layer1_conv2d_padding) * (layer2_conv2d_kernel + layer2_conv2d_padding), layer4_fc2_neurons)
             self.fc2 = nn.Linear(layer4_fc2_neurons, 10)
 
         def forward(self, x):
@@ -526,7 +526,7 @@ class ConvNet(nn.Module):
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=layer2_maxpool2d_kernel, stride=layer2_maxpool2d_stride))
         self.drop_out = nn.Dropout(p=layer23_dropout)
-        self.fc1 = nn.Linear(layer2_conv2d_filter * 7 * 7, layer4_fc2_neurons)
+        self.fc1 = nn.Linear(layer2_conv2d_filter * (layer1_conv2d_kernel + layer1_conv2d_padding) * (layer2_conv2d_kernel + layer2_conv2d_padding), layer4_fc2_neurons)
         self.fc2 = nn.Linear(layer4_fc2_neurons, 10)
 
     def forward(self, x):
