@@ -259,25 +259,25 @@ print(f"Используемое устройство: {device}")
 # Целевая функция Optuna
 def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_optuna):
     # Range of hyperparameters to choose from Optuna (1)
-    layer1_conv2d_filter = trial.suggest_int('layer1_conv2d_filter', 1, 128)
-    layer1_conv2d_kernel = trial.suggest_int('layer1_conv2d_kernel', 5, 5)  # не используем
+    layer1_conv2d_filter = trial.suggest_int('layer1_conv2d_filter', 32, 128)
+    layer1_conv2d_kernel = trial.suggest_int('layer1_conv2d_kernel', 3, 7, step=2)
     layer1_conv2d_stride = trial.suggest_int('layer1_conv2d_stride', 1, 1)  # не используем
-    layer1_conv2d_padding = trial.suggest_int('layer1_conv2d_padding', 2, 2)  # не используем
+    layer1_conv2d_padding = trial.suggest_int('layer1_conv2d_padding', int(layer1_conv2d_kernel / 2), int(layer1_conv2d_kernel / 2))  # не используем
     layer1_maxpool2d_kernel = trial.suggest_int('layer1_maxpool2d_kernel', 2, 2)  # не используем
     layer1_maxpool2d_stride = trial.suggest_int('layer1_maxpool2d_stride', 2, 2)  # не используем
 
-    layer2_conv2d_filter = trial.suggest_int('layer2_conv2d_filter', 1, 128)
-    layer2_conv2d_kernel = trial.suggest_int('layer2_conv2d_kernel', 5, 5)  # не используем
+    layer2_conv2d_filter = trial.suggest_int('layer2_conv2d_filter', 32, 128)
+    layer2_conv2d_kernel = trial.suggest_int('layer2_conv2d_kernel', 3, 7, step=2)
     layer2_conv2d_stride = trial.suggest_int('layer2_conv2d_stride', 1, 1)  # не используем
-    layer2_conv2d_padding = trial.suggest_int('layer2_conv2d_padding', 2, 2)  # не используем
+    layer2_conv2d_padding = trial.suggest_int('layer2_conv2d_padding', int(layer2_conv2d_kernel / 2), int(layer2_conv2d_kernel / 2))  # не используем
     layer2_maxpool2d_kernel = trial.suggest_int('layer2_maxpool2d_kernel', 2, 2)  # не используем
     layer2_maxpool2d_stride = trial.suggest_int('layer2_maxpool2d_stride', 2, 2)  # не используем
 
-    layer23_dropout = trial.suggest_float('layer23_dropout', 1e-1, 5e-1, log=False)  # не используем
+    layer23_dropout = trial.suggest_float('layer23_dropout', 1e-1, 5e-1, step=1e-1)
 
-    layer3_fc1_neurons = trial.suggest_int('layer3_fc1_neurons', 1, 4000)
+    layer3_fc1_neurons = trial.suggest_int('layer3_fc1_neurons', 32, 4000)
 
-    layer4_fc2_neurons = trial.suggest_int('layer4_fc2_neurons', 1, 2000)
+    layer4_fc2_neurons = trial.suggest_int('layer4_fc2_neurons', 32, 2000)
 
     '''
     # Range of hyperparameters to choose from Optuna (2)
@@ -289,6 +289,18 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
     num_epochs = number_epochs_optuna
     learning_rate = 1e-3
     batch_size = 64
+
+    # Specific for MNIST integrated into PyTorch
+    DATA_PATH = 'mnist-data-path'
+    MODEL_STORE_PATH = 'model-store-path'
+    # Transforms to apply to the data
+    trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
+    # MNIST dataset
+    train_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=True, transform=trans, download=True)
+    test_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=False, transform=trans)
+    # Data loader
+    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
     '''
     # Создание модели
@@ -355,7 +367,7 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
                 nn.ReLU(),
                 nn.MaxPool2d(kernel_size=layer2_maxpool2d_kernel, stride=layer2_maxpool2d_stride))
             self.drop_out = nn.Dropout(p=layer23_dropout)
-            self.fc1 = nn.Linear(layer2_conv2d_filter * (layer1_conv2d_kernel + layer1_conv2d_padding) * (layer2_conv2d_kernel + layer2_conv2d_padding), layer4_fc2_neurons)
+            self.fc1 = nn.Linear(layer2_conv2d_filter * int((train_loader.dataset.data.size(1) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride) * int((train_loader.dataset.data.size(2) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride), layer4_fc2_neurons)
             self.fc2 = nn.Linear(layer4_fc2_neurons, 10)
 
         def forward(self, x):
@@ -375,18 +387,6 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
     # Определение оптимизатора
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-    # Specific for MNIST integrated into PyTorch
-    DATA_PATH = 'mnist-data-path'
-    MODEL_STORE_PATH = 'model-store-path'
-    # Transforms to apply to the data
-    trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
-    # MNIST dataset
-    train_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=True, transform=trans, download=True)
-    test_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=False, transform=trans)
-    # Data loader
-    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
-
     # Loss
     criterion = criterion_optuna
 
@@ -396,10 +396,8 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
     acc_list = []
     for epoch in range(num_epochs):
         for i, (images, labels) in enumerate(train_loader):
-
             images = images.to(device)  # Перенос данных на устройство GPU
             labels = labels.to(device)  # Перенос меток на устройство GPU
-
             # Запуск прямого прохода
             outputs = model(images)
             loss = criterion(outputs, labels)
@@ -526,7 +524,7 @@ class ConvNet(nn.Module):
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=layer2_maxpool2d_kernel, stride=layer2_maxpool2d_stride))
         self.drop_out = nn.Dropout(p=layer23_dropout)
-        self.fc1 = nn.Linear(layer2_conv2d_filter * (layer1_conv2d_kernel + layer1_conv2d_padding) * (layer2_conv2d_kernel + layer2_conv2d_padding), layer4_fc2_neurons)
+        self.fc1 = nn.Linear(layer2_conv2d_filter * int((train_loader.dataset.data.size(1) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride) * int((train_loader.dataset.data.size(2) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride), layer4_fc2_neurons)
         self.fc2 = nn.Linear(layer4_fc2_neurons, 10)
 
     def forward(self, x):
