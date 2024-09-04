@@ -39,7 +39,7 @@ with torch.no_grad():
         # Инициализация onnx 
         input = torch.randn(1, 1, 28, 28)
         # Начало сессии onnxruntime
-        onnx_model_path = 'output_onnx/mnist-custom_1.onnx'
+        onnx_model_path = 'output_onnx/mnist-custom_2.onnx'
         #onnx_model_path = 'external_onnx/mnist.onnx'
         ort_sess = ort.InferenceSession(onnx_model_path)
 
