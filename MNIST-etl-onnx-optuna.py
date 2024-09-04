@@ -487,6 +487,8 @@ layer4_fc2_neurons = best_params['layer4_fc2_neurons']
 
 # Ввод прочих параметров
 numepochs = 4
+learning_rate = 1e-3
+batch_size = 64
 
 # Полноценное обучение с наилучшей комбинацией ГП от Optuna
 
@@ -538,6 +540,7 @@ class ConvNet(nn.Module):
 
 
 model = ConvNet()
+print(model)
 
 model = model.to(device) # Перенос модели на устройство GPU
 
