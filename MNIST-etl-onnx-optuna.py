@@ -258,37 +258,16 @@ print(f"Используемое устройство: {device}")
 
 # Целевая функция Optuna
 def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_optuna):
-    # Range of hyperparameters to choose from Optuna (1)
-    layer1_conv2d_filter = trial.suggest_int('layer1_conv2d_filter', 32, 128)
-    layer1_conv2d_kernel = trial.suggest_int('layer1_conv2d_kernel', 3, 7, step=2)
-    layer1_conv2d_stride = trial.suggest_int('layer1_conv2d_stride', 1, 1)  # не используем
-    layer1_conv2d_padding = trial.suggest_int('layer1_conv2d_padding', int(layer1_conv2d_kernel / 2), int(layer1_conv2d_kernel / 2))  # не используем
-    layer1_maxpool2d_kernel = trial.suggest_int('layer1_maxpool2d_kernel', 2, 2)  # не используем
-    layer1_maxpool2d_stride = trial.suggest_int('layer1_maxpool2d_stride', 2, 2)  # не используем
-
-    layer2_conv2d_filter = trial.suggest_int('layer2_conv2d_filter', 32, 128)
-    layer2_conv2d_kernel = trial.suggest_int('layer2_conv2d_kernel', 3, 7, step=2)
-    layer2_conv2d_stride = trial.suggest_int('layer2_conv2d_stride', 1, 1)  # не используем
-    layer2_conv2d_padding = trial.suggest_int('layer2_conv2d_padding', int(layer2_conv2d_kernel / 2), int(layer2_conv2d_kernel / 2))  # не используем
-    layer2_maxpool2d_kernel = trial.suggest_int('layer2_maxpool2d_kernel', 2, 2)  # не используем
-    layer2_maxpool2d_stride = trial.suggest_int('layer2_maxpool2d_stride', 2, 2)  # не используем
-
-    layer23_dropout = trial.suggest_float('layer23_dropout', 1e-1, 5e-1, step=1e-1)
-
-    layer3_fc1_neurons = trial.suggest_int('layer3_fc1_neurons', 32, 4000)
-
-    layer4_fc2_neurons = trial.suggest_int('layer4_fc2_neurons', 32, 2000)
-
-    '''
     # Range of hyperparameters to choose from Optuna (2)
-    learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
     batch_size = trial.suggest_int('batch_size', 32, 256)  # при batch_size>total_step будет batch_size=total_step
-    '''
+    learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
+    adam_betas1 = trial.suggest_float('adam_betas1', 1e-1, 99e-2, log=False)
+    adam_betas2 = trial.suggest_float('adam_betas2', 999e-3, 999999e-6, log=False)
+    adam_eps = trial.suggest_float('adam_eps', 1e-10, 1e-6, log=False)
+    adam_weight_decay = trial.suggest_float('adam_weight_decay', 1e-6, 1e-2, log=True)
 
     # Fixed hyperparameters needed for training
     num_epochs = number_epochs_optuna
-    learning_rate = 1e-3
-    batch_size = 64
 
     # Specific for MNIST integrated into PyTorch
     DATA_PATH = 'mnist-data-path'
@@ -302,90 +281,15 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
-    '''
-    # Создание модели
-    onnx_model1 = onnx.load(path_to_onnx_model_optuna)  # Загрузка модели из ONNX
-
-    # Получение графа модели
-    onnx_graph = onnx_model1.graph
-
-    # Нахождение узлов (нод) для подмены значений ГП в ходе перебора
-    conv_node1 = None
-    maxpool_node1 = None
-    conv_node2 = None
-    maxpool_node2 = None
-    fc_1 = None
-    fc_2 = None
-
-    for node in onnx_graph.node:
-        if node.op_type == "Conv":
-            if node.name == "/layer1/layer1.0/Conv":
-                conv_node1 = node
-            elif node.name == "/layer1/layer2.0/Conv":
-                conv_node2 = node
-        elif node.op_type == "MaxPool":
-            if node.name == "/layer1/layer1.2/MaxPool":
-                maxpool_node1 = node
-            if node.name == "/layer1/layer2.2/MaxPool":
-                maxpool_node2 = node
-        elif node.op_type == "fc_1":
-            fc_1 = node
-        elif node.op_type == "fc_2":
-            fc_2 = node
-
-    # Изменение параметров слоя 1 (conv)
-    if conv_node1 is not None:
-        if name == "main_graph":
-            initializer.dims = layer1_conv2d_filter
-        conv_node1.attribute[0].ints[0] = layer1_conv2d_filter  # filter size
-        conv_node1.attribute[2].ints[0] = layer1_conv2d_kernel  # kernel size
-
-    # Изменение параметров слоя 1 (pooling)
-    if maxpool_node1 is not None:
-        # Новые значения параметров из Optuna для слоя 1 (pooling)
-        layer1_maxpool2d_kernel = trial.suggest_int('layer1_maxpool2d_kernel', 1, 25)
-        layer1_maxpool2d_stride = trial.suggest_int('layer1_maxpool2d_stride', 1, 7)
-
-        # Изменение атрибутов слоя 1 (pooling)
-        maxpool_node1.attribute[0].ints[0] = layer1_maxpool2d_kernel  # kernel size
-        maxpool_node1.attribute[1].ints[0] = layer1_maxpool2d_stride  # stride
-
-    onnx_model2 = onnx_model1
-    model = convert(onnx_model2)
-    '''
-
-    # Задаем модель нейросети для Optuna в явном виде
-    class ConvNet(nn.Module):
-        def __init__(self):
-            super(ConvNet, self).__init__()
-            self.layer1 = nn.Sequential(
-                nn.Conv2d(1, layer1_conv2d_filter, kernel_size=layer1_conv2d_kernel, stride=layer1_conv2d_stride, padding=layer1_conv2d_padding),
-                nn.ReLU(),
-                nn.MaxPool2d(kernel_size=layer1_maxpool2d_kernel, stride=layer1_maxpool2d_stride))
-            self.layer2 = nn.Sequential(
-                nn.Conv2d(layer1_conv2d_filter, layer2_conv2d_filter, kernel_size=layer2_conv2d_kernel, stride=layer2_conv2d_stride, padding=layer2_conv2d_padding),
-                nn.ReLU(),
-                nn.MaxPool2d(kernel_size=layer2_maxpool2d_kernel, stride=layer2_maxpool2d_stride))
-            self.drop_out = nn.Dropout(p=layer23_dropout)
-            self.fc1 = nn.Linear(layer2_conv2d_filter * int((train_loader.dataset.data.size(1) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride) * int((train_loader.dataset.data.size(2) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride), layer4_fc2_neurons)
-            self.fc2 = nn.Linear(layer4_fc2_neurons, 10)
-
-        def forward(self, x):
-            out = self.layer1(x)
-            out = self.layer2(out)
-            out = out.reshape(out.size(0), -1)
-            out = self.drop_out(out)
-            out = self.fc1(out)
-            out = self.fc2(out)
-            return out
-
-    model = ConvNet()
-    print(model)
+    # Задаем модель нейросети для Optuna (импорт из onnx)
+    onnx_model = onnx.load(path_to_onnx_model_optuna)  # Загрузка модели из ONNX
+    model = convert(onnx_model)  # Подготовка к дообучению
 
     model.to(device)  # Перенос модели на устройство GPU
 
     # Определение оптимизатора
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(adam_betas1, adam_betas2), eps=adam_eps, weight_decay=adam_weight_decay)
+    print(optimizer)
 
     # Loss
     criterion = criterion_optuna
@@ -467,28 +371,15 @@ print(f"Количество обрезанных (pruned) trials: {len(study.ge
 # Обучение модели с лучшими параметрами
 # Ввод определенных Optuna лучших параметров
 best_params = study.best_params
-layer1_conv2d_filter = best_params['layer1_conv2d_filter']
-layer1_conv2d_kernel = best_params['layer1_conv2d_kernel']
-layer1_conv2d_stride = best_params['layer1_conv2d_stride']
-layer1_conv2d_padding = best_params['layer1_conv2d_padding']
-layer1_maxpool2d_kernel = best_params['layer1_maxpool2d_kernel']
-layer1_maxpool2d_stride = best_params['layer1_maxpool2d_stride']
-layer2_conv2d_filter = best_params['layer2_conv2d_filter']
-layer2_conv2d_kernel = best_params['layer2_conv2d_kernel']
-layer2_conv2d_stride = best_params['layer2_conv2d_stride']
-layer2_conv2d_padding = best_params['layer2_conv2d_padding']
-layer2_maxpool2d_kernel = best_params['layer2_maxpool2d_kernel']
-layer2_maxpool2d_stride = best_params['layer2_maxpool2d_stride']
-layer23_dropout = best_params['layer23_dropout']
-layer3_fc1_neurons = best_params['layer3_fc1_neurons']
-layer4_fc2_neurons = best_params['layer4_fc2_neurons']
-#learning_rate = best_params['learning_rate']
-#batch_size = best_params['batch_size']
+learning_rate = best_params['learning_rate']
+batch_size = best_params['batch_size']
+adam_betas1 = best_params['adam_betas1']
+adam_betas2 = best_params['adam_betas2']
+adam_eps = best_params['adam_eps']
+adam_weight_decay = best_params['adam_weight_decay']
 
 # Ввод прочих параметров
 numepochs = 4
-learning_rate = 1e-3
-batch_size = 64
 
 # Полноценное обучение с наилучшей комбинацией ГП от Optuna
 
@@ -506,46 +397,16 @@ train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=
 test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
 # Подгрузка исходной модели onnx
-#onnx_model = onnx.load(onnxpath)
+onnx_model = onnx.load(onnxpath)
 # Extract parameters from onnx into pytorch
-#torch_model = convert(onnx_model)
-#model = torch_model
-
-# Задаем модель нейросети в явном виде
-class ConvNet(nn.Module):
-    def __init__(self):
-        super(ConvNet, self).__init__()
-        self.layer1 = nn.Sequential(
-            nn.Conv2d(1, layer1_conv2d_filter, kernel_size=layer1_conv2d_kernel, stride=layer1_conv2d_stride,
-                      padding=layer1_conv2d_padding),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=layer1_maxpool2d_kernel, stride=layer1_maxpool2d_stride))
-        self.layer2 = nn.Sequential(
-            nn.Conv2d(layer1_conv2d_filter, layer2_conv2d_filter, kernel_size=layer2_conv2d_kernel,
-                      stride=layer2_conv2d_stride, padding=layer2_conv2d_padding),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=layer2_maxpool2d_kernel, stride=layer2_maxpool2d_stride))
-        self.drop_out = nn.Dropout(p=layer23_dropout)
-        self.fc1 = nn.Linear(layer2_conv2d_filter * int((train_loader.dataset.data.size(1) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride) * int((train_loader.dataset.data.size(2) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride), layer4_fc2_neurons)
-        self.fc2 = nn.Linear(layer4_fc2_neurons, 10)
-
-    def forward(self, x):
-        out = self.layer1(x)
-        out = self.layer2(out)
-        out = out.reshape(out.size(0), -1)
-        out = self.drop_out(out)
-        out = self.fc1(out)
-        out = self.fc2(out)
-        return out
-
-
-model = ConvNet()
-print(model)
+torch_model = convert(onnx_model)
+model = torch_model
 
 model = model.to(device) # Перенос модели на устройство GPU
 
 # Определение оптимизатора
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(adam_betas1, adam_betas2), eps=adam_eps, weight_decay=adam_weight_decay)
+print(optimizer)
 
 # Train the model
 total_step = len(train_loader)
@@ -610,7 +471,7 @@ torch_input = torch.randn(1, 1, 28, 28, device=device)
 torch.onnx.export(
     model,  # PyTorch model
     (torch_input,),  # Input data
-    'output_onnx/mnist-custom_1.onnx',  # Output ONNX file
+    'output_onnx/mnist-custom_2.onnx',  # Output ONNX file
     input_names=['input'],  # Names for the input
     output_names=['output'],  # Names for the output
     dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}},
