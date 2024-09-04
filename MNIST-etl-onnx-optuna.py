@@ -24,13 +24,19 @@ print(f"Используемое устройство: {device}")
 ################################################################################################
 
 # Суть Optuna в том, чтобы применить smart подход (вместо грубых эвристик) и автоматизировать процесс поиска
-# наилучшей комбинации гиперпараметров (ГП). Поэтому важно представлять полный набор ГП.
-# Типы гиперпараметров:
-# 1) ГП модели: включают параметры, определяющие архитектуру модели, например, количество скрытых слоев;
+# наилучшей комбинации гиперпараметров (ГП). Поэтому важно представлять полный набор ГП. Типы гиперпараметров:
+
+# 1) ГП модели: включают параметры, определяющие архитектуру модели, например, количество скрытых слоев и нейронов;
+    # для Optuna следует задавать модель явно
+
 # 2) ГП оптимизации: к ним относятся параметры, управляющие процессом оптимизации, например, скорость обучения;
-# 3) ГП регуляризации: имеют отношение, например, к коэффициенту dropout, а также настройкам L1 / L2 регуляризации.
+    # для Optuna можно использовать подгруженную модель, например, из onnx
+
+# б/н) ГП регуляризации: имеют отношение, например, к коэффициенту dropout, а также настройкам L1 / L2 регуляризации.
     # Важное - L1 регуляризация (L1 penalty, Lasso) в torch не представлена
-    # Важное - L2 регуляризация (L2 penalty, Ridge) в torch задается в настройках оптимизатора как weight_decay
+    # Важное - L2 регуляризация (L2 penalty, Ridge) в torch задается в настройках оптимизатора как weight_decay,
+        # поэтому целесообразно отнести к ГП оптимизации
+    # Важное - dropout задается отдельным слоем, поэтому целесообразно отнести к ГП модели.
 
 ################################################ 1) Перечень:
 
@@ -218,7 +224,7 @@ print(f"Используемое устройство: {device}")
     # running_mean` and :attr:`running_var` as ``None``. When these buffers are ``None``, this module always
     # uses batch statistics in both training and eval modes. Default: ``True``
 
-################################################ 3) Перечень:
+################################################ б/н) Перечень:
 
 # Регуляризация с использованием слоя dropout - список torch:
 # 'Dropout'  # Используется
@@ -236,8 +242,14 @@ print(f"Используемое устройство: {device}")
 
 # Просто загнать все возможные ГП и все значения - плохая идея.
 # Следует примерно представлять, какие ГП важны, а также разумные диапазоны значений.
+
 # Помимо ГП, можно поработать с  dataset (Data Augmentation, нормализация etc),
-# поменять настройки Optuna (sampler, pruner, number of trials etc), либо изменить постановку задачи.
+# поменять настройки Optuna (sampler, pruner, number of trials etc),
+# либо изменить постановку задачи.
+
+# Предлагается следующая последовательность применения Optuna:
+# - сначала отработать по ГП модели,
+# - затем для наилучших моделей отработать по ГП оптимизации.
 
 # В любом случае эффективное применение Optuna связано с огромным объемом вычислений, почти все из которых
 # дадут результаты, подлежащие отсеиванию. Поэтому не рекомендуется делать всё на одном вычислителе.
@@ -246,36 +258,39 @@ print(f"Используемое устройство: {device}")
 
 # Целевая функция Optuna
 def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_optuna):
-    # Range of hyperparameters to choose from Optuna
-    learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
-
+    # Range of hyperparameters to choose from Optuna (1)
     layer1_conv2d_filter = trial.suggest_int('layer1_conv2d_filter', 1, 128)
-    layer1_conv2d_kernel = trial.suggest_int('layer1_conv2d_kernel', 1, 25)
-    layer1_conv2d_stride = trial.suggest_int('layer1_conv2d_stride', 1, 7)
-    layer1_conv2d_padding = trial.suggest_int('layer1_conv2d_padding', 2, 14)
-    layer1_maxpool2d_kernel = trial.suggest_int('layer1_maxpool2d_kernel', 1, 25)
-    layer1_maxpool2d_stride = trial.suggest_int('layer1_maxpool2d_stride', 1, 7)
-    layer1_maxpool2d_padding = trial.suggest_int('layer1_maxpool2d_padding', 2, 14)
+    layer1_conv2d_kernel = trial.suggest_int('layer1_conv2d_kernel', 5, 5)  # не используем
+    layer1_conv2d_stride = trial.suggest_int('layer1_conv2d_stride', 1, 1)  # не используем
+    layer1_conv2d_padding = trial.suggest_int('layer1_conv2d_padding', 2, 2)  # не используем
+    layer1_maxpool2d_kernel = trial.suggest_int('layer1_maxpool2d_kernel', 2, 2)  # не используем
+    layer1_maxpool2d_stride = trial.suggest_int('layer1_maxpool2d_stride', 2, 2)  # не используем
 
     layer2_conv2d_filter = trial.suggest_int('layer2_conv2d_filter', 1, 128)
-    layer2_conv2d_kernel = trial.suggest_int('layer2_conv2d_kernel', 1, 25)
-    layer2_conv2d_stride = trial.suggest_int('layer2_conv2d_stride', 1, 7)
-    layer2_conv2d_padding = trial.suggest_int('layer2_conv2d_padding', 2, 14)
-    layer2_maxpool2d_kernel = trial.suggest_int('layer2_maxpool2d_kernel', 1, 25)
-    layer2_maxpool2d_stride = trial.suggest_int('layer2_maxpool2d_stride', 1, 7)
-    layer2_maxpool2d_padding = trial.suggest_int('layer2_maxpool2d_padding', 2, 14)
+    layer2_conv2d_kernel = trial.suggest_int('layer2_conv2d_kernel', 5, 5)  # не используем
+    layer2_conv2d_stride = trial.suggest_int('layer2_conv2d_stride', 1, 1)  # не используем
+    layer2_conv2d_padding = trial.suggest_int('layer2_conv2d_padding', 2, 2)  # не используем
+    layer2_maxpool2d_kernel = trial.suggest_int('layer2_maxpool2d_kernel', 2, 2)  # не используем
+    layer2_maxpool2d_stride = trial.suggest_int('layer2_maxpool2d_stride', 2, 2)  # не используем
+
+    layer23_dropout = trial.suggest_float('layer23_dropout', 1e-1, 5e-1, log=False)  # не используем
 
     layer3_fc1_neurons = trial.suggest_int('layer3_fc1_neurons', 1, 4000)
 
     layer4_fc2_neurons = trial.suggest_int('layer4_fc2_neurons', 1, 2000)
 
-    # Нужно учесть, что возможны случаи batch_size > total_step
-    # тогда обучение будет вестись как batch_size = total_step
-    batch_size = trial.suggest_int('batch_size', 32, 256)
+    '''
+    # Range of hyperparameters to choose from Optuna (2)
+    learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
+    batch_size = trial.suggest_int('batch_size', 32, 256)  # при batch_size>total_step будет batch_size=total_step
+    '''
 
     # Fixed hyperparameters needed for training
     num_epochs = number_epochs_optuna
+    learning_rate = 1e-3
+    batch_size = 64
 
+    '''
     # Создание модели
     onnx_model1 = onnx.load(path_to_onnx_model_optuna)  # Загрузка модели из ONNX
 
@@ -325,6 +340,36 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
 
     onnx_model2 = onnx_model1
     model = convert(onnx_model2)
+    '''
+
+    # Задаем модель нейросети для Optuna в явном виде
+    class ConvNet(nn.Module):
+        def __init__(self):
+            super(ConvNet, self).__init__()
+            self.layer1 = nn.Sequential(
+                nn.Conv2d(1, layer1_conv2d_filter, kernel_size=layer1_conv2d_kernel, stride=layer1_conv2d_stride, padding=layer1_conv2d_padding),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=layer1_maxpool2d_kernel, stride=layer1_maxpool2d_stride))
+            self.layer2 = nn.Sequential(
+                nn.Conv2d(layer1_conv2d_filter, layer2_conv2d_filter, kernel_size=layer2_conv2d_kernel, stride=layer2_conv2d_stride, padding=layer2_conv2d_padding),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=layer2_maxpool2d_kernel, stride=layer2_maxpool2d_stride))
+            self.drop_out = nn.Dropout(p=layer23_dropout)
+            self.fc1 = nn.Linear(layer2_conv2d_filter * 7 * 7, layer4_fc2_neurons)
+            self.fc2 = nn.Linear(layer4_fc2_neurons, 10)
+
+        def forward(self, x):
+            out = self.layer1(x)
+            out = self.layer2(out)
+            out = out.reshape(out.size(0), -1)
+            out = self.drop_out(out)
+            out = self.fc1(out)
+            out = self.fc2(out)
+            return out
+
+    model = ConvNet()
+    print(model)
+
     model.to(device)  # Перенос модели на устройство GPU
 
     # Определение оптимизатора
@@ -424,14 +469,29 @@ print(f"Количество обрезанных (pruned) trials: {len(study.ge
 # Обучение модели с лучшими параметрами
 # Ввод определенных Optuna лучших параметров
 best_params = study.best_params
-learning_rate = best_params['learning_rate']
-batch_size = best_params['batch_size']
+layer1_conv2d_filter = best_params['layer1_conv2d_filter']
+layer1_conv2d_kernel = best_params['layer1_conv2d_kernel']
+layer1_conv2d_stride = best_params['layer1_conv2d_stride']
+layer1_conv2d_padding = best_params['layer1_conv2d_padding']
+layer1_maxpool2d_kernel = best_params['layer1_maxpool2d_kernel']
+layer1_maxpool2d_stride = best_params['layer1_maxpool2d_stride']
+layer2_conv2d_filter = best_params['layer2_conv2d_filter']
+layer2_conv2d_kernel = best_params['layer2_conv2d_kernel']
+layer2_conv2d_stride = best_params['layer2_conv2d_stride']
+layer2_conv2d_padding = best_params['layer2_conv2d_padding']
+layer2_maxpool2d_kernel = best_params['layer2_maxpool2d_kernel']
+layer2_maxpool2d_stride = best_params['layer2_maxpool2d_stride']
+layer23_dropout = best_params['layer23_dropout']
+layer3_fc1_neurons = best_params['layer3_fc1_neurons']
+layer4_fc2_neurons = best_params['layer4_fc2_neurons']
+#learning_rate = best_params['learning_rate']
+#batch_size = best_params['batch_size']
 
 # Ввод прочих параметров
 numepochs = 4
 
-# Подгрузка исходной модели onnx
-onnx_model = onnx.load(onnxpath)
+# Полноценное обучение с наилучшей комбинацией ГП от Optuna
+
 # Формирование массивов данных MNIST
 # Specific for MNIST integrated into PyTorch
 DATA_PATH = 'mnist-data-path'
@@ -445,9 +505,42 @@ test_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=False, transform
 train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
 test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
+# Подгрузка исходной модели onnx
+#onnx_model = onnx.load(onnxpath)
 # Extract parameters from onnx into pytorch
-torch_model = convert(onnx_model)
-model = torch_model
+#torch_model = convert(onnx_model)
+#model = torch_model
+
+# Задаем модель нейросети в явном виде
+class ConvNet(nn.Module):
+    def __init__(self):
+        super(ConvNet, self).__init__()
+        self.layer1 = nn.Sequential(
+            nn.Conv2d(1, layer1_conv2d_filter, kernel_size=layer1_conv2d_kernel, stride=layer1_conv2d_stride,
+                      padding=layer1_conv2d_padding),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=layer1_maxpool2d_kernel, stride=layer1_maxpool2d_stride))
+        self.layer2 = nn.Sequential(
+            nn.Conv2d(layer1_conv2d_filter, layer2_conv2d_filter, kernel_size=layer2_conv2d_kernel,
+                      stride=layer2_conv2d_stride, padding=layer2_conv2d_padding),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=layer2_maxpool2d_kernel, stride=layer2_maxpool2d_stride))
+        self.drop_out = nn.Dropout(p=layer23_dropout)
+        self.fc1 = nn.Linear(layer2_conv2d_filter * 7 * 7, layer4_fc2_neurons)
+        self.fc2 = nn.Linear(layer4_fc2_neurons, 10)
+
+    def forward(self, x):
+        out = self.layer1(x)
+        out = self.layer2(out)
+        out = out.reshape(out.size(0), -1)
+        out = self.drop_out(out)
+        out = self.fc1(out)
+        out = self.fc2(out)
+        return out
+
+
+model = ConvNet()
+
 model = model.to(device) # Перенос модели на устройство GPU
 
 # Определение оптимизатора
@@ -516,7 +609,7 @@ torch_input = torch.randn(1, 1, 28, 28, device=device)
 torch.onnx.export(
     model,  # PyTorch model
     (torch_input,),  # Input data
-    'output_onnx/mnist-custom_3.onnx',  # Output ONNX file
+    'output_onnx/mnist-custom_1.onnx',  # Output ONNX file
     input_names=['input'],  # Names for the input
     output_names=['output'],  # Names for the output
     dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}},
