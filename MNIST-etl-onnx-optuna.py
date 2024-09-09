@@ -361,7 +361,7 @@ study = optuna.create_study(sampler=optuna.samplers.TPESampler(n_startup_trials=
                             pruner=optuna.pruners.MedianPruner(n_startup_trials=10),
                             direction='maximize')
 study.optimize(lambda trial: objective(trial, onnxpath, number_epochs_optuna, criterion),
-               n_trials=101)  # желательно задавать >100 trials
+               n_trials=1001)  # желательно задавать >100 trials
 
 # Вывод результатов
 print(f"Лучшая точность: {study.best_value}")

@@ -21,10 +21,10 @@ import numpy as np
 # Просмотр обученных моделей (графов) https://netron.app/
 
 # Hyperparameters for training
-num_epochs = 6
+num_epochs = 4
 num_classes = 10
-batch_size = 100
-learning_rate = 0.001
+batch_size = 32
+learning_rate = 0.000203466753304073
 
 # Specific for MNIST integrated into PyTorch
 DATA_PATH = 'mnist-data-path'
@@ -46,16 +46,16 @@ class ConvNet(nn.Module):
     def __init__(self):
         super(ConvNet, self).__init__()
         self.layer1 = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=5, stride=1, padding=2),
+            nn.Conv2d(1, 47, kernel_size=7, stride=1, padding=3),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2))
         self.layer2 = nn.Sequential(
-            nn.Conv2d(32, 64, kernel_size=5, stride=1, padding=2),
+            nn.Conv2d(47, 89, kernel_size=7, stride=1, padding=3),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2))
-        self.drop_out = nn.Dropout()
-        self.fc1 = nn.Linear(64 * 7 * 7, 1000)
-        self.fc2 = nn.Linear(1000, 10)
+        self.drop_out = nn.Dropout(p=0.4)
+        self.fc1 = nn.Linear(89 * 7 * 7, 32)
+        self.fc2 = nn.Linear(32, 10)
 
     def forward(self, x):
         out = self.layer1(x)
@@ -71,7 +71,7 @@ model = ConvNet()
 
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.3777652561791783, 0.9992479320325025), eps=6.749204604405833e-08, weight_decay=9.461795602386313e-06)
 
 # Train the model
 total_step = len(train_loader)
@@ -119,7 +119,7 @@ torch_input = torch.randn(1, 1, 28, 28)
 torch.onnx.export(
     model,  # PyTorch model
     (torch_input,),  # Input data
-    'output_onnx/mnist-custom_1.onnx',  # Output ONNX file
+    'output_onnx/mnist-custom_3.onnx',  # Output ONNX file
     input_names=['input'],  # Names for the input
     output_names=['output'],  # Names for the output
     dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}},
@@ -127,7 +127,7 @@ torch.onnx.export(
 )
 
 # Save trained model into .pt
-torch.save(model.state_dict(),'output_pt/mnist-custom_1.pt')
+torch.save(model.state_dict(),'output_pt/mnist-custom_3.pt')
 
 # Plot for training process
 p = figure(y_axis_label='Loss', width=850, y_range=(0, 1), title='PyTorch ConvNet results')
