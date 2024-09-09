@@ -9,6 +9,11 @@ from bokeh.models import LinearAxis, Range1d
 import numpy as np
 
 
+# Проверка доступности GPU
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#device = torch.device("cpu")
+print(f"Используемое устройство: {device}")
+
 # Скрипт на основе
 # https://neurohive.io/ru/tutorial/cnn-na-pytorch/
 # https://github.com/adventuresinML/adventures-in-ml-code/blob/master/conv_net_py_torch.py
@@ -63,6 +68,7 @@ class ConvNet(nn.Module):
 
 
 model = ConvNet()
+model.to(device)  # Перенос модели на устройство GPU
 
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
@@ -74,6 +80,9 @@ loss_list = []
 acc_list = []
 for epoch in range(num_epochs):
     for i, (images, labels) in enumerate(train_loader):
+        images = images.to(device)  # Перенос данных на устройство GPU
+        labels = labels.to(device)  # Перенос меток на устройство GPU
+
         # Run the forward pass
         outputs = model(images)
         loss = criterion(outputs, labels)
@@ -102,13 +111,16 @@ with torch.no_grad():
     correct = 0
     total = 0
     for images, labels in test_loader:
+        images = images.to(device)  # Перенос данных на устройство GPU
+        labels = labels.to(device)  # Перенос меток на устройство GPU
+
         outputs = model(images)
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
         correct += (predicted == labels).sum().item()
 
     print('Test Accuracy of the model on the 10000 test images: {} %'.format((correct / total) * 100))
-
+'''
 # Save trained model into onnx
 torch_input = torch.randn(1, 1, 28, 28)
 torch.onnx.export(
@@ -123,7 +135,7 @@ torch.onnx.export(
 
 # Save trained model into .pt
 torch.save(model.state_dict(),'output_pt/mnist-custom_1.pt')
-
+'''
 # Plot for training process
 p = figure(y_axis_label='Loss', width=850, y_range=(0, 1), title='PyTorch ConvNet results')
 p.extra_y_ranges = {'Accuracy': Range1d(start=0, end=100)}
