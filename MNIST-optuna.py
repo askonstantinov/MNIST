@@ -266,7 +266,7 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
     layer1_maxpool2d_kernel = trial.suggest_int('layer1_maxpool2d_kernel', 2, 2)  # не используем
     layer1_maxpool2d_stride = trial.suggest_int('layer1_maxpool2d_stride', 2, 2)  # не используем
 
-    layer2_conv2d_filter = trial.suggest_int('layer2_conv2d_filter', 64, 512, step=2)
+    layer2_conv2d_filter = trial.suggest_int('layer2_conv2d_filter', 64, 256, step=2)
     layer2_conv2d_kernel = trial.suggest_int('layer2_conv2d_kernel', 3, 7, step=2)
     layer2_conv2d_stride = trial.suggest_int('layer2_conv2d_stride', 1, 1)  # не используем
     layer2_conv2d_padding = trial.suggest_int('layer2_conv2d_padding', int(layer2_conv2d_kernel / 2), int(layer2_conv2d_kernel / 2))  # не используем
