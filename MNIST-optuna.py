@@ -301,12 +301,12 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
             self.layer1 = nn.Sequential(
                 nn.Conv2d(1, layer1_conv2d_filter, kernel_size=layer1_conv2d_kernel, stride=layer1_conv2d_stride, padding=layer1_conv2d_padding),
                 nn.BatchNorm2d(layer1_conv2d_filter),
-                nn.ReLU(),
+                nn.LeakyReLU(),
                 nn.MaxPool2d(kernel_size=layer1_maxpool2d_kernel, stride=layer1_maxpool2d_stride))
             self.layer2 = nn.Sequential(
                 nn.Conv2d(layer1_conv2d_filter, layer2_conv2d_filter, kernel_size=layer2_conv2d_kernel, stride=layer2_conv2d_stride, padding=layer2_conv2d_padding),
                 nn.BatchNorm2d(layer2_conv2d_filter),
-                nn.ReLU(),
+                nn.LeakyReLU(),
                 nn.MaxPool2d(kernel_size=layer2_maxpool2d_kernel, stride=layer2_maxpool2d_stride))
             self.drop_out = nn.Dropout(p=layer23_dropout)
             self.fc1 = nn.Linear(layer2_conv2d_filter * int((train_loader.dataset.data.size(1) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride) * int((train_loader.dataset.data.size(2) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride), layer4_fc2_neurons)
@@ -357,22 +357,23 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
             correct = (predicted == labels).sum().item()
             acc_list.append(correct / total)
 
-            if batch_size >= total_step and (i + 1) == total_step:
-                print('Optuna Train Epoch [{}/{}], Step [{}/{}], SUPER Batch = Total steps [{}], Loss: {:.4f}, Accuracy: {:.2f}%'
-                      .format(epoch + 1, num_epochs, i + 1, total_step,
-                              total_step, loss.item(), (correct / total) * 100))
-            elif (i + 1) % batch_size == 0:
-                print('Optuna Train Epoch [{}/{}], Step [{}/{}], Batch [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
-                      .format(epoch + 1, num_epochs, i + 1, total_step, int((i + 1) / batch_size),
-                              math.ceil(total_step / batch_size), loss.item(), (correct / total) * 100))
-            elif (i + 1) == total_step:
-                print('Optuna Train Epoch [{}/{}], Step [{}/{}], RESIDUAL Batch [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
-                      .format(epoch + 1, num_epochs, i + 1, total_step, (int((i + 1) / batch_size)) + 1,
-                              math.ceil(total_step / batch_size), loss.item(), (correct / total) * 100))
+            #if batch_size >= total_step and (i + 1) == total_step:
+            #    print('Optuna Train Epoch [{}/{}], Step [{}/{}], SUPER Batch = Total steps [{}], Loss: {:.4f}, Accuracy: {:.2f}%'
+            #          .format(epoch + 1, num_epochs, i + 1, total_step,
+            #                  total_step, loss.item(), (correct / total) * 100))
+            #elif (i + 1) % batch_size == 0:
+            #   print('Optuna Train Epoch [{}/{}], Step [{}/{}], Batch [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
+            #         .format(epoch + 1, num_epochs, i + 1, total_step, int((i + 1) / batch_size),
+            #                 math.ceil(total_step / batch_size), loss.item(), (correct / total) * 100))
+            #elif (i + 1) == total_step:
+            #    print('Optuna Train Epoch [{}/{}], Step [{}/{}], RESIDUAL Batch [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
+            #         .format(epoch + 1, num_epochs, i + 1, total_step, (int((i + 1) / batch_size)) + 1,
+            #                  math.ceil(total_step / batch_size), loss.item(), (correct / total) * 100))
 
             acc += (correct / total) * 100
 
-        acc_aver = acc / (int(enumerate(train_loader)) + 1)
+        acc_aver = acc / len(train_loader)
+        print(f"{acc_aver:.2f} %")
         trial.report(acc_aver, epoch)
         if trial.should_prune():
             raise optuna.exceptions.TrialPruned()
@@ -462,13 +463,13 @@ class ConvNet(nn.Module):
             nn.Conv2d(1, layer1_conv2d_filter, kernel_size=layer1_conv2d_kernel, stride=layer1_conv2d_stride,
                       padding=layer1_conv2d_padding),
             nn.BatchNorm2d(layer1_conv2d_filter),
-            nn.ReLU(),
+            nn.LeakyReLU(),
             nn.MaxPool2d(kernel_size=layer1_maxpool2d_kernel, stride=layer1_maxpool2d_stride))
         self.layer2 = nn.Sequential(
             nn.Conv2d(layer1_conv2d_filter, layer2_conv2d_filter, kernel_size=layer2_conv2d_kernel,
                       stride=layer2_conv2d_stride, padding=layer2_conv2d_padding),
             nn.BatchNorm2d(layer2_conv2d_filter),
-            nn.ReLU(),
+            nn.LeakyReLU(),
             nn.MaxPool2d(kernel_size=layer2_maxpool2d_kernel, stride=layer2_maxpool2d_stride))
         self.drop_out = nn.Dropout(p=layer23_dropout)
         self.fc1 = nn.Linear(layer2_conv2d_filter * int((train_loader.dataset.data.size(1) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride) * int((train_loader.dataset.data.size(2) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride), layer4_fc2_neurons)
