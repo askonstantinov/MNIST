@@ -372,7 +372,7 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
 
             acc += (correct / total) * 100
 
-        acc_aver = acc / (enumerate(train_loader) + 1)
+        acc_aver = acc / (int(enumerate(train_loader)) + 1)
         trial.report(acc_aver, epoch)
         if trial.should_prune():
             raise optuna.exceptions.TrialPruned()
