@@ -259,29 +259,27 @@ print(f"Используемое устройство: {device}")
 # Целевая функция Optuna
 def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_optuna):
     # Range of hyperparameters to choose from Optuna (1)
-    layer1_conv2d_filter = trial.suggest_int('layer1_conv2d_filter', 32, 128)
+    layer1_conv2d_filter = trial.suggest_int('layer1_conv2d_filter', 32, 128, step=2)
     layer1_conv2d_kernel = trial.suggest_int('layer1_conv2d_kernel', 3, 7, step=2)
     layer1_conv2d_stride = trial.suggest_int('layer1_conv2d_stride', 1, 1)  # не используем
     layer1_conv2d_padding = trial.suggest_int('layer1_conv2d_padding', int(layer1_conv2d_kernel / 2), int(layer1_conv2d_kernel / 2))  # не используем
     layer1_maxpool2d_kernel = trial.suggest_int('layer1_maxpool2d_kernel', 2, 2)  # не используем
     layer1_maxpool2d_stride = trial.suggest_int('layer1_maxpool2d_stride', 2, 2)  # не используем
 
-    layer2_conv2d_filter = trial.suggest_int('layer2_conv2d_filter', 32, 128)
+    layer2_conv2d_filter = trial.suggest_int('layer2_conv2d_filter', 64, 512, step=2)
     layer2_conv2d_kernel = trial.suggest_int('layer2_conv2d_kernel', 3, 7, step=2)
     layer2_conv2d_stride = trial.suggest_int('layer2_conv2d_stride', 1, 1)  # не используем
     layer2_conv2d_padding = trial.suggest_int('layer2_conv2d_padding', int(layer2_conv2d_kernel / 2), int(layer2_conv2d_kernel / 2))  # не используем
     layer2_maxpool2d_kernel = trial.suggest_int('layer2_maxpool2d_kernel', 2, 2)  # не используем
     layer2_maxpool2d_stride = trial.suggest_int('layer2_maxpool2d_stride', 2, 2)  # не используем
 
-    layer23_dropout = trial.suggest_float('layer23_dropout', 1e-1, 5e-1, step=1e-1)
+    layer23_dropout = trial.suggest_float('layer23_dropout', 5e-1, 5e-1)  # не используем
 
-    layer3_fc1_neurons = trial.suggest_int('layer3_fc1_neurons', 32, 4000)
-
-    layer4_fc2_neurons = trial.suggest_int('layer4_fc2_neurons', 32, 2000)
+    layer4_fc2_neurons = trial.suggest_int('layer4_fc2_neurons', 10, 10000)
 
     # Fixed hyperparameters needed for training
     num_epochs = number_epochs_optuna
-    learning_rate = 1e-3
+    learning_rate = 1e-2
     batch_size = 64
 
     # Specific for MNIST integrated into PyTorch
@@ -302,10 +300,12 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
             super(ConvNet, self).__init__()
             self.layer1 = nn.Sequential(
                 nn.Conv2d(1, layer1_conv2d_filter, kernel_size=layer1_conv2d_kernel, stride=layer1_conv2d_stride, padding=layer1_conv2d_padding),
+                nn.BatchNorm2d(layer1_conv2d_filter),
                 nn.ReLU(),
                 nn.MaxPool2d(kernel_size=layer1_maxpool2d_kernel, stride=layer1_maxpool2d_stride))
             self.layer2 = nn.Sequential(
                 nn.Conv2d(layer1_conv2d_filter, layer2_conv2d_filter, kernel_size=layer2_conv2d_kernel, stride=layer2_conv2d_stride, padding=layer2_conv2d_padding),
+                nn.BatchNorm2d(layer2_conv2d_filter),
                 nn.ReLU(),
                 nn.MaxPool2d(kernel_size=layer2_maxpool2d_kernel, stride=layer2_maxpool2d_stride))
             self.drop_out = nn.Dropout(p=layer23_dropout)
@@ -337,6 +337,7 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
     loss_list = []
     acc_list = []
     for epoch in range(num_epochs):
+        acc = 0
         for i, (images, labels) in enumerate(train_loader):
             images = images.to(device)  # Перенос данных на устройство GPU
             labels = labels.to(device)  # Перенос меток на устройство GPU
@@ -369,6 +370,13 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
                       .format(epoch + 1, num_epochs, i + 1, total_step, (int((i + 1) / batch_size)) + 1,
                               math.ceil(total_step / batch_size), loss.item(), (correct / total) * 100))
 
+            acc += (correct / total) * 100
+
+        acc_aver = acc / (enumerate(train_loader) + 1)
+        trial.report(acc_aver, epoch)
+        if trial.should_prune():
+            raise optuna.exceptions.TrialPruned()
+
     # Тестирование модели
     model.eval()
     with torch.no_grad():
@@ -391,12 +399,12 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
 
 # Ввод значений параметров и запуск Optuna
 onnxpath = 'output_onnx/mnist-custom_1.onnx'
-number_epochs_optuna = 4
+number_epochs_optuna = 10
 # Loss
 criterion = nn.CrossEntropyLoss()
 
-study = optuna.create_study(sampler=optuna.samplers.TPESampler(n_startup_trials=10),
-                            pruner=optuna.pruners.MedianPruner(n_startup_trials=10),
+study = optuna.create_study(sampler=optuna.samplers.TPESampler(),
+                            pruner=optuna.pruners.MedianPruner(n_startup_trials=20, n_warmup_steps=3),
                             direction='maximize')
 study.optimize(lambda trial: objective(trial, onnxpath, number_epochs_optuna, criterion),
                n_trials=1001)  # желательно задавать >100 trials
@@ -422,14 +430,13 @@ layer2_conv2d_padding = best_params['layer2_conv2d_padding']
 layer2_maxpool2d_kernel = best_params['layer2_maxpool2d_kernel']
 layer2_maxpool2d_stride = best_params['layer2_maxpool2d_stride']
 layer23_dropout = best_params['layer23_dropout']
-layer3_fc1_neurons = best_params['layer3_fc1_neurons']
 layer4_fc2_neurons = best_params['layer4_fc2_neurons']
 #learning_rate = best_params['learning_rate']
 #batch_size = best_params['batch_size']
 
 # Ввод прочих параметров
-numepochs = 4
-learning_rate = 1e-3
+numepochs = 10
+learning_rate = 1e-2
 batch_size = 64
 
 # Полноценное обучение с наилучшей комбинацией ГП от Optuna
@@ -454,11 +461,13 @@ class ConvNet(nn.Module):
         self.layer1 = nn.Sequential(
             nn.Conv2d(1, layer1_conv2d_filter, kernel_size=layer1_conv2d_kernel, stride=layer1_conv2d_stride,
                       padding=layer1_conv2d_padding),
+            nn.BatchNorm2d(layer1_conv2d_filter),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=layer1_maxpool2d_kernel, stride=layer1_maxpool2d_stride))
         self.layer2 = nn.Sequential(
             nn.Conv2d(layer1_conv2d_filter, layer2_conv2d_filter, kernel_size=layer2_conv2d_kernel,
                       stride=layer2_conv2d_stride, padding=layer2_conv2d_padding),
+            nn.BatchNorm2d(layer2_conv2d_filter),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=layer2_maxpool2d_kernel, stride=layer2_maxpool2d_stride))
         self.drop_out = nn.Dropout(p=layer23_dropout)
