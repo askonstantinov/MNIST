@@ -266,7 +266,7 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
     layer1_maxpool2d_kernel = trial.suggest_int('layer1_maxpool2d_kernel', 2, 2)  # не используем
     layer1_maxpool2d_stride = trial.suggest_int('layer1_maxpool2d_stride', 2, 2)  # не используем
 
-    layer2_conv2d_filter = trial.suggest_int('layer2_conv2d_filter', 64, 256, step=2)
+    layer2_conv2d_filter = trial.suggest_int('layer2_conv2d_filter', 32, 128, step=2)
     layer2_conv2d_kernel = trial.suggest_int('layer2_conv2d_kernel', 3, 7, step=2)
     layer2_conv2d_stride = trial.suggest_int('layer2_conv2d_stride', 1, 1)  # не используем
     layer2_conv2d_padding = trial.suggest_int('layer2_conv2d_padding', int(layer2_conv2d_kernel / 2), int(layer2_conv2d_kernel / 2))  # не используем
@@ -275,12 +275,12 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
 
     layer23_dropout = trial.suggest_float('layer23_dropout', 5e-1, 5e-1)  # не используем
 
-    layer4_fc2_neurons = trial.suggest_int('layer4_fc2_neurons', 10, 10000)
+    layer4_fc2_neurons = trial.suggest_int('layer4_fc2_neurons', 320, 3200, step=32)
 
     # Fixed hyperparameters needed for training
     num_epochs = number_epochs_optuna
-    learning_rate = 1e-2
-    batch_size = 64
+    learning_rate = 1e-3
+    batch_size = 32
 
     # Specific for MNIST integrated into PyTorch
     DATA_PATH = 'mnist-data-path'
@@ -400,15 +400,15 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
 
 # Ввод значений параметров и запуск Optuna
 onnxpath = 'output_onnx/mnist-custom_1.onnx'
-number_epochs_optuna = 10
+number_epochs_optuna = 6
 # Loss
 criterion = nn.CrossEntropyLoss()
 
 study = optuna.create_study(sampler=optuna.samplers.TPESampler(),
-                            pruner=optuna.pruners.MedianPruner(n_startup_trials=20, n_warmup_steps=3),
+                            pruner=optuna.pruners.MedianPruner(),
                             direction='maximize')
 study.optimize(lambda trial: objective(trial, onnxpath, number_epochs_optuna, criterion),
-               n_trials=1001)  # желательно задавать >100 trials
+               n_trials=101)  # желательно задавать >100 trials
 
 # Вывод результатов
 print(f"Лучшая точность: {study.best_value}")
@@ -436,9 +436,9 @@ layer4_fc2_neurons = best_params['layer4_fc2_neurons']
 #batch_size = best_params['batch_size']
 
 # Ввод прочих параметров
-numepochs = 10
-learning_rate = 1e-2
-batch_size = 64
+numepochs = 12
+learning_rate = 1e-4
+batch_size = 32
 
 # Полноценное обучение с наилучшей комбинацией ГП от Optuna
 
