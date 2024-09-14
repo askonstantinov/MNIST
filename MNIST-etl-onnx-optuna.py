@@ -353,12 +353,12 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
 
 # Ввод значений параметров и запуск Optuna
 onnxpath = 'output_onnx/mnist-custom_1.onnx'
-number_epochs_optuna = 4
+number_epochs_optuna = 12
 # Loss
 criterion = nn.CrossEntropyLoss()
 
-study = optuna.create_study(sampler=optuna.samplers.TPESampler(n_startup_trials=10),
-                            pruner=optuna.pruners.MedianPruner(n_startup_trials=10),
+study = optuna.create_study(sampler=optuna.samplers.TPESampler(n_startup_trials=40, n_ei_candidates=48, gamma=0.2, seed=42),
+                            pruner=optuna.pruners.HyperbandPruner(min_resource=1, max_resource='auto', reduction_factor=3),
                             direction='maximize')
 study.optimize(lambda trial: objective(trial, onnxpath, number_epochs_optuna, criterion),
                n_trials=1001)  # желательно задавать >100 trials
@@ -379,7 +379,7 @@ adam_eps = best_params['adam_eps']
 adam_weight_decay = best_params['adam_weight_decay']
 
 # Ввод прочих параметров
-numepochs = 4
+numepochs = 12
 
 # Полноценное обучение с наилучшей комбинацией ГП от Optuna
 

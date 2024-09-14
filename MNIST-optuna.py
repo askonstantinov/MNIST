@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
@@ -7,13 +6,10 @@ from bokeh.plotting import figure
 from bokeh.io import show
 from bokeh.models import LinearAxis, Range1d
 import numpy as np
-import onnx
 import torch
-from onnx import numpy_helper
-from onnx2torch import convert
-import onnxruntime as ort
 import optuna
 import math
+from torch.utils.data import random_split
 
 
 # Проверка доступности GPU
@@ -258,41 +254,47 @@ print(f"Используемое устройство: {device}")
 
 # Целевая функция Optuna
 def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_optuna):
+    # Fixed hyperparameters needed for training
+    num_epochs_optuna = number_epochs_optuna
+    learning_rate_optuna = 1e-3
+    batch_size_optuna = 32
+
+    # Формирование массивов данных MNIST
+    # Specific for MNIST integrated into PyTorch
+    DATA_PATH = 'mnist-data-path'
+    MODEL_STORE_PATH = 'model-store-path'
+    # Transforms to apply to the data
+    trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
+    # MNIST 70000 images dataset (60000 images for train, and 10000 images for test)
+    train_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=True, transform=trans, download=True)
+    test_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=False, transform=trans)
+    # Разделение на обучающий, валидационный и тестовый наборы (в соотношении приблизительно 70%-15%-15%)
+    train_size = 50000
+    val_size = 10000
+    train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
+
+    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size_optuna, shuffle=True)
+    val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size_optuna, shuffle=False)
+    test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size_optuna, shuffle=False)
+
     # Range of hyperparameters to choose from Optuna (1)
-    layer1_conv2d_filter = trial.suggest_int('layer1_conv2d_filter', 32, 128, step=2)
+    layer1_conv2d_filter = trial.suggest_int('layer1_conv2d_filter', 32, 128)
     layer1_conv2d_kernel = trial.suggest_int('layer1_conv2d_kernel', 3, 7, step=2)
     layer1_conv2d_stride = trial.suggest_int('layer1_conv2d_stride', 1, 1)  # не используем
     layer1_conv2d_padding = trial.suggest_int('layer1_conv2d_padding', int(layer1_conv2d_kernel / 2), int(layer1_conv2d_kernel / 2))  # не используем
     layer1_maxpool2d_kernel = trial.suggest_int('layer1_maxpool2d_kernel', 2, 2)  # не используем
     layer1_maxpool2d_stride = trial.suggest_int('layer1_maxpool2d_stride', 2, 2)  # не используем
 
-    layer2_conv2d_filter = trial.suggest_int('layer2_conv2d_filter', 32, 128, step=2)
+    layer2_conv2d_filter = trial.suggest_int('layer2_conv2d_filter', 32, 128)
     layer2_conv2d_kernel = trial.suggest_int('layer2_conv2d_kernel', 3, 7, step=2)
     layer2_conv2d_stride = trial.suggest_int('layer2_conv2d_stride', 1, 1)  # не используем
     layer2_conv2d_padding = trial.suggest_int('layer2_conv2d_padding', int(layer2_conv2d_kernel / 2), int(layer2_conv2d_kernel / 2))  # не используем
     layer2_maxpool2d_kernel = trial.suggest_int('layer2_maxpool2d_kernel', 2, 2)  # не используем
     layer2_maxpool2d_stride = trial.suggest_int('layer2_maxpool2d_stride', 2, 2)  # не используем
 
-    layer23_dropout = trial.suggest_float('layer23_dropout', 5e-1, 5e-1)  # не используем
+    layer3_fc1_neurons = layer2_conv2d_filter * int((train_loader.dataset.dataset.data.size(1) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride) * int((train_loader.dataset.dataset.data.size(1) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride)
 
-    layer4_fc2_neurons = trial.suggest_int('layer4_fc2_neurons', 320, 3200, step=32)
-
-    # Fixed hyperparameters needed for training
-    num_epochs = number_epochs_optuna
-    learning_rate = 1e-3
-    batch_size = 32
-
-    # Specific for MNIST integrated into PyTorch
-    DATA_PATH = 'mnist-data-path'
-    MODEL_STORE_PATH = 'model-store-path'
-    # Transforms to apply to the data
-    trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
-    # MNIST dataset
-    train_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=True, transform=trans, download=True)
-    test_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=False, transform=trans)
-    # Data loader
-    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
+    layer4_fc2_neurons = trial.suggest_int('layer4_fc2_neurons', 100, 10000)
 
     # Задаем модель нейросети для Optuna в явном виде
     class ConvNet(nn.Module):
@@ -308,16 +310,16 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
                 nn.BatchNorm2d(layer2_conv2d_filter),
                 nn.LeakyReLU(),
                 nn.MaxPool2d(kernel_size=layer2_maxpool2d_kernel, stride=layer2_maxpool2d_stride))
-            self.drop_out = nn.Dropout(p=layer23_dropout)
-            self.fc1 = nn.Linear(layer2_conv2d_filter * int((train_loader.dataset.data.size(1) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride) * int((train_loader.dataset.data.size(2) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride), layer4_fc2_neurons)
+            self.fc1 = nn.Linear(layer3_fc1_neurons, layer4_fc2_neurons)
+            self.drop_out = nn.Dropout(p=0.5)
             self.fc2 = nn.Linear(layer4_fc2_neurons, 10)
 
         def forward(self, x):
             out = self.layer1(x)
             out = self.layer2(out)
             out = out.reshape(out.size(0), -1)
-            out = self.drop_out(out)
             out = self.fc1(out)
+            out = self.drop_out(out)
             out = self.fc2(out)
             return out
 
@@ -327,7 +329,7 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
     model.to(device)  # Перенос модели на устройство GPU
 
     # Определение оптимизатора
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate_optuna)
 
     # Loss
     criterion = criterion_optuna
@@ -336,11 +338,14 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
     total_step = len(train_loader)
     loss_list = []
     acc_list = []
-    for epoch in range(num_epochs):
-        acc = 0
+    val_acc_list = []
+    for epoch in range(num_epochs_optuna):
+        train_acc = 0
         for i, (images, labels) in enumerate(train_loader):
+
             images = images.to(device)  # Перенос данных на устройство GPU
             labels = labels.to(device)  # Перенос меток на устройство GPU
+
             # Запуск прямого прохода
             outputs = model(images)
             loss = criterion(outputs, labels)
@@ -357,24 +362,41 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
             correct = (predicted == labels).sum().item()
             acc_list.append(correct / total)
 
-            #if batch_size >= total_step and (i + 1) == total_step:
-            #    print('Optuna Train Epoch [{}/{}], Step [{}/{}], SUPER Batch = Total steps [{}], Loss: {:.4f}, Accuracy: {:.2f}%'
-            #          .format(epoch + 1, num_epochs, i + 1, total_step,
-            #                  total_step, loss.item(), (correct / total) * 100))
-            #elif (i + 1) % batch_size == 0:
-            #   print('Optuna Train Epoch [{}/{}], Step [{}/{}], Batch [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
-            #         .format(epoch + 1, num_epochs, i + 1, total_step, int((i + 1) / batch_size),
-            #                 math.ceil(total_step / batch_size), loss.item(), (correct / total) * 100))
-            #elif (i + 1) == total_step:
-            #    print('Optuna Train Epoch [{}/{}], Step [{}/{}], RESIDUAL Batch [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
-            #         .format(epoch + 1, num_epochs, i + 1, total_step, (int((i + 1) / batch_size)) + 1,
-            #                  math.ceil(total_step / batch_size), loss.item(), (correct / total) * 100))
+            if batch_size_optuna >= total_step and (i + 1) == total_step:
+                print('Optuna Train Epoch [{}/{}], Step [{}/{}], SUPER Batch = Total steps [{}], Loss: {:.4f}, Optuna Train Accuracy: {:.2f} %'
+                      .format(epoch + 1, num_epochs_optuna, i + 1, total_step,
+                              total_step, loss.item(), (correct / total) * 100))
+            elif (i + 1) % batch_size_optuna == 0:
+               print('Optuna Train Epoch [{}/{}], Step [{}/{}], Batch [{}/{}], Loss: {:.4f}, Optuna Train Accuracy: {:.2f} %'
+                     .format(epoch + 1, num_epochs_optuna, i + 1, total_step, int((i + 1) / batch_size_optuna),
+                             math.ceil(total_step / batch_size_optuna), loss.item(), (correct / total) * 100))
+            elif (i + 1) == total_step:
+                print('Optuna Train Epoch [{}/{}], Step [{}/{}], RESIDUAL Batch [{}/{}], Loss: {:.4f}, Optuna Train Accuracy: {:.2f} %'
+                     .format(epoch + 1, num_epochs_optuna, i + 1, total_step, (int((i + 1) / batch_size_optuna)) + 1,
+                              math.ceil(total_step / batch_size_optuna), loss.item(), (correct / total) * 100))
 
-            acc += (correct / total) * 100
+            train_acc += (correct / total) * 100
 
-        acc_aver = acc / len(train_loader)
-        print(f"{acc_aver:.2f} %")
-        trial.report(acc_aver, epoch)
+        # Кросс-валидация
+        model.eval()
+        with torch.no_grad():
+            correct = 0
+            total = 0
+            for images, labels in val_loader:
+
+                images = images.to(device)  # Перенос данных на устройство GPU
+                labels = labels.to(device)  # Перенос данных на устройство GPU
+
+                outputs = model(images)
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+
+            val_acc = correct / total
+            val_acc_list.append(val_acc)
+            print(f"########################### Optuna Cross-Validation Accuracy: {(val_acc*100):.2f} %")
+
+        trial.report(val_acc, epoch)
         if trial.should_prune():
             raise optuna.exceptions.TrialPruned()
 
@@ -393,19 +415,19 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
-    accuracy = (correct / total) * 100
+    test_accuracy = (correct / total) * 100
 
     # Возврат точности как метрики для Optuna
-    return accuracy
+    return test_accuracy
 
 # Ввод значений параметров и запуск Optuna
 onnxpath = 'output_onnx/mnist-custom_1.onnx'
-number_epochs_optuna = 6
+number_epochs_optuna = 14
 # Loss
 criterion = nn.CrossEntropyLoss()
 
-study = optuna.create_study(sampler=optuna.samplers.TPESampler(),
-                            pruner=optuna.pruners.MedianPruner(),
+study = optuna.create_study(sampler=optuna.samplers.TPESampler(n_startup_trials=40),
+                            pruner=optuna.pruners.HyperbandPruner(),
                             direction='maximize')
 study.optimize(lambda trial: objective(trial, onnxpath, number_epochs_optuna, criterion),
                n_trials=101)  # желательно задавать >100 trials
@@ -415,7 +437,33 @@ print(f"Лучшая точность: {study.best_value}")
 print(f"Лучшие параметры: {study.best_params}")
 print(f"Количество обрезанных (pruned) trials: {len(study.get_trials(deepcopy=False, states=[optuna.trial.TrialState.PRUNED]))}")
 
+################################################################################################
 # Обучение модели с лучшими параметрами
+# Ввод прочих параметров
+number_epochs_final = 14
+learning_rate_final = 1e-3
+batch_size_final = 32
+
+# Полноценное обучение с наилучшей комбинацией ГП от Optuna
+
+# Формирование массивов данных MNIST
+# Specific for MNIST integrated into PyTorch
+DATA_PATH = 'mnist-data-path'
+MODEL_STORE_PATH = 'model-store-path'
+# Transforms to apply to the data
+trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
+# MNIST 70000 images dataset (60000 images for train, and 10000 images for test)
+train_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=True, transform=trans, download=True)
+test_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=False, transform=trans)
+# Разделение на обучающий, валидационный и тестовый наборы (в соотношении приблизительно 70%-15%-15%)
+train_size = 50000
+val_size = 10000
+train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
+
+train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size_final, shuffle=True)
+val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size_final, shuffle=False)
+test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size_final, shuffle=False)
+
 # Ввод определенных Optuna лучших параметров
 best_params = study.best_params
 layer1_conv2d_filter = best_params['layer1_conv2d_filter']
@@ -430,30 +478,8 @@ layer2_conv2d_stride = best_params['layer2_conv2d_stride']
 layer2_conv2d_padding = best_params['layer2_conv2d_padding']
 layer2_maxpool2d_kernel = best_params['layer2_maxpool2d_kernel']
 layer2_maxpool2d_stride = best_params['layer2_maxpool2d_stride']
-layer23_dropout = best_params['layer23_dropout']
+layer3_fc1_neurons = layer2_conv2d_filter * int((train_loader.dataset.dataset.data.size(1) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride) * int((train_loader.dataset.dataset.data.size(1) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride)
 layer4_fc2_neurons = best_params['layer4_fc2_neurons']
-#learning_rate = best_params['learning_rate']
-#batch_size = best_params['batch_size']
-
-# Ввод прочих параметров
-numepochs = 12
-learning_rate = 1e-4
-batch_size = 32
-
-# Полноценное обучение с наилучшей комбинацией ГП от Optuna
-
-# Формирование массивов данных MNIST
-# Specific for MNIST integrated into PyTorch
-DATA_PATH = 'mnist-data-path'
-MODEL_STORE_PATH = 'model-store-path'
-# Transforms to apply to the data
-trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
-# MNIST dataset
-train_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=True, transform=trans, download=True)
-test_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=False, transform=trans)
-# Data loader
-train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
 # Задаем модель нейросети в явном виде для финального обучения
 class ConvNet(nn.Module):
@@ -471,16 +497,16 @@ class ConvNet(nn.Module):
             nn.BatchNorm2d(layer2_conv2d_filter),
             nn.LeakyReLU(),
             nn.MaxPool2d(kernel_size=layer2_maxpool2d_kernel, stride=layer2_maxpool2d_stride))
-        self.drop_out = nn.Dropout(p=layer23_dropout)
-        self.fc1 = nn.Linear(layer2_conv2d_filter * int((train_loader.dataset.data.size(1) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride) * int((train_loader.dataset.data.size(2) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride), layer4_fc2_neurons)
+        self.fc1 = nn.Linear(layer3_fc1_neurons, layer4_fc2_neurons)
+        self.drop_out = nn.Dropout(p=0.5)
         self.fc2 = nn.Linear(layer4_fc2_neurons, 10)
 
     def forward(self, x):
         out = self.layer1(x)
         out = self.layer2(out)
         out = out.reshape(out.size(0), -1)
-        out = self.drop_out(out)
         out = self.fc1(out)
+        out = self.drop_out(out)
         out = self.fc2(out)
         return out
 
@@ -488,16 +514,18 @@ class ConvNet(nn.Module):
 model = ConvNet()
 print(model)
 
-model = model.to(device) # Перенос модели на устройство GPU
+model = model.to(device)  # Перенос модели на устройство GPU
 
 # Определение оптимизатора
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate_final)
 
-# Train the model
+# Обучение модели
 total_step = len(train_loader)
 loss_list = []
 acc_list = []
-for epoch in range(numepochs):
+val_acc_list = []
+for epoch in range(number_epochs_final):
+    train_acc = 0
     for i, (images, labels) in enumerate(train_loader):
 
         images = images.to(device)  # Перенос данных на устройство
@@ -519,19 +547,38 @@ for epoch in range(numepochs):
         correct = (predicted == labels).sum().item()
         acc_list.append(correct / total)
 
-        if batch_size >= total_step and (i + 1) == total_step:
+        if batch_size_final >= total_step and (i + 1) == total_step:
             print(
-                'Train Epoch [{}/{}], Step [{}/{}], SUPER Batch = Total steps [{}], Loss: {:.4f}, Accuracy: {:.2f}%'
-                .format(epoch + 1, numepochs, i + 1, total_step,
+                'Train Epoch [{}/{}], Step [{}/{}], SUPER Batch = Total steps [{}], Loss: {:.4f}, Train Accuracy: {:.2f} %'
+                .format(epoch + 1, number_epochs_final, i + 1, total_step,
                         total_step, loss.item(), (correct / total) * 100))
-        elif (i + 1) % batch_size == 0:
-            print('Train Epoch [{}/{}], Step [{}/{}], Batch [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
-                  .format(epoch + 1, numepochs, i + 1, total_step, int((i + 1) / batch_size),
-                          math.ceil(total_step / batch_size), loss.item(), (correct / total) * 100))
+        elif (i + 1) % batch_size_final == 0:
+            print('Train Epoch [{}/{}], Step [{}/{}], Batch [{}/{}], Loss: {:.4f}, Train Accuracy: {:.2f} %'
+                  .format(epoch + 1, number_epochs_final, i + 1, total_step, int((i + 1) / batch_size_final),
+                          math.ceil(total_step / batch_size_final), loss.item(), (correct / total) * 100))
         elif (i + 1) == total_step:
-            print('Train Epoch [{}/{}], Step [{}/{}], RESIDUAL Batch [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
-                  .format(epoch + 1, numepochs, i + 1, total_step, (int((i + 1) / batch_size)) + 1,
-                          math.ceil(total_step / batch_size), loss.item(), (correct / total) * 100))
+            print('Train Epoch [{}/{}], Step [{}/{}], RESIDUAL Batch [{}/{}], Loss: {:.4f}, Train Accuracy: {:.2f} %'
+                  .format(epoch + 1, number_epochs_final, i + 1, total_step, (int((i + 1) / batch_size_final)) + 1,
+                          math.ceil(total_step / batch_size_final), loss.item(), (correct / total) * 100))
+
+    # Кросс-валидация
+    model.eval()
+    with torch.no_grad():
+        correct = 0
+        total = 0
+        for images, labels in val_loader:
+
+            images = images.to(device)  # Перенос данных на устройство GPU
+            labels = labels.to(device)  # Перенос данных на устройство GPU
+
+            outputs = model(images)
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+
+        val_acc = correct / total
+        val_acc_list.append(val_acc)
+        print(f"########################### Cross-Validation Accuracy: {(val_acc*100):.2f} %")
 
 # Test the model
 model.eval()
