@@ -321,7 +321,7 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
             out = self.fc1(out)
             out = self.drop_out(out)
             out = self.fc2(out)
-            out = torch.softmax(out, dim=1)  # Вычисление вероятностей с помощью Softmax
+            #out = torch.softmax(out, dim=1)  # Вычисление вероятностей с помощью Softmax
             return out
 
     model = ConvNet()
@@ -349,8 +349,8 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
 
             # Запуск прямого прохода
             outputs = model(images)
-            #loss = criterion(outputs, labels)
-            loss = criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
+            loss = criterion(outputs, labels)
+            #loss = criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
             loss_list.append(loss.item())
 
             # Обратное распространение и оптимизация
@@ -426,8 +426,8 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
 onnxpath = 'output_onnx/mnist-custom_1.onnx'
 number_epochs_optuna = 14
 # Loss
-#criterion = nn.CrossEntropyLoss()
-criterion = nn.MSELoss()  # для работы MSE нужно добавить слой softmax в конец (в forward) и добавить в цикл one_hot
+criterion = nn.CrossEntropyLoss()
+#criterion = nn.MSELoss()  # для работы MSE нужно добавить слой softmax в конец (в forward) и добавить в цикл one_hot
 
 study = optuna.create_study(sampler=optuna.samplers.TPESampler(n_startup_trials=40),
                             pruner=optuna.pruners.HyperbandPruner(),
@@ -511,7 +511,7 @@ class ConvNet(nn.Module):
         out = self.fc1(out)
         out = self.drop_out(out)
         out = self.fc2(out)
-        out = torch.softmax(out, dim=1)  # Вычисление вероятностей с помощью Softmax
+        #out = torch.softmax(out, dim=1)  # Вычисление вероятностей с помощью Softmax
         return out
 
 
@@ -537,8 +537,8 @@ for epoch in range(number_epochs_final):
 
         # Run the forward pass
         outputs = model(images)
-        #loss = criterion(outputs, labels)
-        loss = criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
+        loss = criterion(outputs, labels)
+        #loss = criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
         loss_list.append(loss.item())
 
         # Backprop and perform Adam optimization
