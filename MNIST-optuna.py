@@ -278,21 +278,15 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
     test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size_optuna, shuffle=False)
 
     # Range of hyperparameters to choose from Optuna (1)
-    layer1_conv2d_filter = trial.suggest_int('layer1_conv2d_filter', 32, 64)
+    layer1_conv2d_filter = trial.suggest_int('layer1_conv2d_filter', 32, 128)
     layer1_conv2d_kernel = trial.suggest_int('layer1_conv2d_kernel', 3, 7, step=2)
-    layer1_conv2d_stride = trial.suggest_int('layer1_conv2d_stride', 1, 1)  # не используем
-    layer1_conv2d_padding = trial.suggest_int('layer1_conv2d_padding', int(layer1_conv2d_kernel / 2), int(layer1_conv2d_kernel / 2))  # не используем
-    layer1_maxpool2d_kernel = trial.suggest_int('layer1_maxpool2d_kernel', 2, 2)  # не используем
-    layer1_maxpool2d_stride = trial.suggest_int('layer1_maxpool2d_stride', 2, 2)  # не используем
+    layer1_leakyrelu = trial.suggest_float('layer1_leakyrelu', 1e-03, 1e-01, log=True)
 
-    layer2_conv2d_filter = trial.suggest_int('layer2_conv2d_filter', 64, 128)
+    layer2_conv2d_filter = trial.suggest_int('layer2_conv2d_filter', 32, 128)
     layer2_conv2d_kernel = trial.suggest_int('layer2_conv2d_kernel', 3, 7, step=2)
-    layer2_conv2d_stride = trial.suggest_int('layer2_conv2d_stride', 1, 1)  # не используем
-    layer2_conv2d_padding = trial.suggest_int('layer2_conv2d_padding', int(layer2_conv2d_kernel / 2), int(layer2_conv2d_kernel / 2))  # не используем
-    layer2_maxpool2d_kernel = trial.suggest_int('layer2_maxpool2d_kernel', 2, 2)  # не используем
-    layer2_maxpool2d_stride = trial.suggest_int('layer2_maxpool2d_stride', 2, 2)  # не используем
+    layer2_leakyrelu = trial.suggest_float('layer2_leakyrelu', 1e-03, 1e-01, log=True)
 
-    layer3_fc1_neurons = layer2_conv2d_filter * int((train_loader.dataset.dataset.data.size(1) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride) * int((train_loader.dataset.dataset.data.size(1) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride)
+    layer3_fc1_neurons = layer2_conv2d_filter * int(train_loader.dataset.dataset.data.size(1) / (2*2)) * int(train_loader.dataset.dataset.data.size(1) / (2*2))
 
     layer4_fc2_neurons = trial.suggest_int('layer4_fc2_neurons', 100, 10000)
 
@@ -301,15 +295,15 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
         def __init__(self):
             super(ConvNet, self).__init__()
             self.layer1 = nn.Sequential(
-                nn.Conv2d(1, layer1_conv2d_filter, kernel_size=layer1_conv2d_kernel, stride=layer1_conv2d_stride, padding=layer1_conv2d_padding),
+                nn.Conv2d(1, layer1_conv2d_filter, kernel_size=layer1_conv2d_kernel, stride=1, padding=int(layer1_conv2d_kernel / 2)),
                 nn.BatchNorm2d(layer1_conv2d_filter),
-                nn.LeakyReLU(),
-                nn.MaxPool2d(kernel_size=layer1_maxpool2d_kernel, stride=layer1_maxpool2d_stride))
+                nn.LeakyReLU(negative_slope=layer1_leakyrelu),
+                nn.MaxPool2d(kernel_size=2, stride=2))
             self.layer2 = nn.Sequential(
-                nn.Conv2d(layer1_conv2d_filter, layer2_conv2d_filter, kernel_size=layer2_conv2d_kernel, stride=layer2_conv2d_stride, padding=layer2_conv2d_padding),
+                nn.Conv2d(layer1_conv2d_filter, layer2_conv2d_filter, kernel_size=layer2_conv2d_kernel, stride=1, padding=int(layer2_conv2d_kernel / 2)),
                 nn.BatchNorm2d(layer2_conv2d_filter),
-                nn.LeakyReLU(),
-                nn.MaxPool2d(kernel_size=layer2_maxpool2d_kernel, stride=layer2_maxpool2d_stride))
+                nn.LeakyReLU(negative_slope=layer2_leakyrelu),
+                nn.MaxPool2d(kernel_size=2, stride=2))
             self.fc1 = nn.Linear(layer3_fc1_neurons, layer4_fc2_neurons)
             self.drop_out = nn.Dropout(p=0.5)
             self.fc2 = nn.Linear(layer4_fc2_neurons, 10)
@@ -429,7 +423,7 @@ number_epochs_optuna = 14
 criterion = nn.CrossEntropyLoss()
 #criterion = nn.MSELoss()  # для работы MSE нужно добавить слой softmax в конец (в forward) и добавить в цикл one_hot
 
-study = optuna.create_study(sampler=optuna.samplers.TPESampler(n_startup_trials=40),
+study = optuna.create_study(sampler=optuna.samplers.TPESampler(n_startup_trials=30),
                             pruner=optuna.pruners.HyperbandPruner(),
                             direction='maximize')
 study.optimize(lambda trial: objective(trial, onnxpath, number_epochs_optuna, criterion),
@@ -471,17 +465,11 @@ test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size_final, shuf
 best_params = study.best_params
 layer1_conv2d_filter = best_params['layer1_conv2d_filter']
 layer1_conv2d_kernel = best_params['layer1_conv2d_kernel']
-layer1_conv2d_stride = best_params['layer1_conv2d_stride']
-layer1_conv2d_padding = best_params['layer1_conv2d_padding']
-layer1_maxpool2d_kernel = best_params['layer1_maxpool2d_kernel']
-layer1_maxpool2d_stride = best_params['layer1_maxpool2d_stride']
+layer1_leakyrelu = best_params['layer1_leakyrelu']
 layer2_conv2d_filter = best_params['layer2_conv2d_filter']
 layer2_conv2d_kernel = best_params['layer2_conv2d_kernel']
-layer2_conv2d_stride = best_params['layer2_conv2d_stride']
-layer2_conv2d_padding = best_params['layer2_conv2d_padding']
-layer2_maxpool2d_kernel = best_params['layer2_maxpool2d_kernel']
-layer2_maxpool2d_stride = best_params['layer2_maxpool2d_stride']
-layer3_fc1_neurons = layer2_conv2d_filter * int((train_loader.dataset.dataset.data.size(1) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride) * int((train_loader.dataset.dataset.data.size(1) / layer1_maxpool2d_stride) / layer2_maxpool2d_stride)
+layer2_leakyrelu = best_params['layer2_leakyrelu']
+layer3_fc1_neurons = layer2_conv2d_filter * int(train_loader.dataset.dataset.data.size(1) / (2*2)) * int(train_loader.dataset.dataset.data.size(1) / (2*2))
 layer4_fc2_neurons = best_params['layer4_fc2_neurons']
 
 # Задаем модель нейросети в явном виде для финального обучения
@@ -489,17 +477,15 @@ class ConvNet(nn.Module):
     def __init__(self):
         super(ConvNet, self).__init__()
         self.layer1 = nn.Sequential(
-            nn.Conv2d(1, layer1_conv2d_filter, kernel_size=layer1_conv2d_kernel, stride=layer1_conv2d_stride,
-                      padding=layer1_conv2d_padding),
+            nn.Conv2d(1, layer1_conv2d_filter, kernel_size=layer1_conv2d_kernel, stride=1, padding=int(layer1_conv2d_kernel / 2)),
             nn.BatchNorm2d(layer1_conv2d_filter),
-            nn.LeakyReLU(),
-            nn.MaxPool2d(kernel_size=layer1_maxpool2d_kernel, stride=layer1_maxpool2d_stride))
+            nn.LeakyReLU(negative_slope=layer1_leakyrelu),
+            nn.MaxPool2d(kernel_size=2, stride=2))
         self.layer2 = nn.Sequential(
-            nn.Conv2d(layer1_conv2d_filter, layer2_conv2d_filter, kernel_size=layer2_conv2d_kernel,
-                      stride=layer2_conv2d_stride, padding=layer2_conv2d_padding),
+            nn.Conv2d(layer1_conv2d_filter, layer2_conv2d_filter, kernel_size=layer2_conv2d_kernel, stride=1, padding=int(layer2_conv2d_kernel / 2)),
             nn.BatchNorm2d(layer2_conv2d_filter),
-            nn.LeakyReLU(),
-            nn.MaxPool2d(kernel_size=layer2_maxpool2d_kernel, stride=layer2_maxpool2d_stride))
+            nn.LeakyReLU(negative_slope=layer2_leakyrelu),
+            nn.MaxPool2d(kernel_size=2, stride=2))
         self.fc1 = nn.Linear(layer3_fc1_neurons, layer4_fc2_neurons)
         self.drop_out = nn.Dropout(p=0.5)
         self.fc2 = nn.Linear(layer4_fc2_neurons, 10)
