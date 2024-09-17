@@ -82,8 +82,8 @@ def objective(trial, number_epochs_optuna, criterion_optuna):
         stride_size = 1
         padding_size = int(kernel_size / 2)
         leakyrelu = trial.suggest_float(f"leakyrelu_{i}", 1e-03, 9e-01, log=True)
-        maxpool_kernel_size = trial.suggest_int(f'maxpool_kernel_size_{i}', 1, 2)
-        maxpool_stride_size = trial.suggest_int(f'maxpool_stride_size_{i}', 1, 2)
+        maxpool_kernel_size = 2 if 0 < i <= 2 else 1
+        maxpool_stride_size = 2 if 0 < i <= 2 else 1
 
         conv_layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride_size, padding=padding_size))
         conv_layers.append(nn.LeakyReLU(negative_slope=leakyrelu))
@@ -277,17 +277,16 @@ n_layers = n_layers  # Определение числа слоев
 conv_layers = []
 # Создание слоев
 for i in range(n_layers):
-    in_channels = 1 if i == 0 else conv_layers[-4].out_channels
+    in_channels = 1 if i == 0 else conv_layers[-3].out_channels
     out_channels = best_params['out_channels' + str(f'_{i}')]
     kernel_size = best_params['kernel_size' + str(f'_{i}')]
     stride_size = 1
     padding_size = int(kernel_size / 2)
     leakyrelu = best_params['leakyrelu' + str(f'_{i}')]
-    maxpool_kernel_size = best_params['maxpool_kernel_size' + str(f'_{i}')]
-    maxpool_stride_size = best_params['maxpool_stride_size' + str(f'_{i}')]
+    maxpool_kernel_size = 2 if 0 < i <= 2 else 1
+    maxpool_stride_size = 2 if 0 < i <= 2 else 1
 
     conv_layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride_size, padding=padding_size))
-    conv_layers.append(nn.BatchNorm2d(out_channels))
     conv_layers.append(nn.LeakyReLU(negative_slope=leakyrelu))
     conv_layers.append(nn.MaxPool2d(kernel_size=maxpool_kernel_size, stride=maxpool_stride_size))
 
