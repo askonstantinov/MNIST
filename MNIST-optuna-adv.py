@@ -72,7 +72,7 @@ def objective(trial, number_epochs_optuna, criterion_optuna):
 
     # Определим сверточные слои
     conv_layers = []
-    n_layers = trial.suggest_int("n_layers", 1, 32)  # Определение числа сверточных слоев
+    n_layers = trial.suggest_int("n_layers", 1, 24)  # Определение числа сверточных слоев
     # Создание слоев
     for i in range(n_layers):
         in_channels = 1 if i == 0 else conv_layers[-3].out_channels
