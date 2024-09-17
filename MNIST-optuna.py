@@ -335,7 +335,6 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
     acc_list = []
     val_acc_list = []
     for epoch in range(num_epochs_optuna):
-        train_acc = 0
         for i, (images, labels) in enumerate(train_loader):
 
             images = images.to(device)  # Перенос данных на устройство GPU
@@ -370,8 +369,6 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
                 print('Optuna Train Epoch [{}/{}], Step [{}/{}], RESIDUAL Batch [{}/{}], Loss: {:.4f}, Optuna Train Accuracy: {:.2f} %'
                      .format(epoch + 1, num_epochs_optuna, i + 1, total_step, (int((i + 1) / batch_size_optuna)) + 1,
                               math.ceil(total_step / batch_size_optuna), loss.item(), (correct / total) * 100))
-
-            train_acc += (correct / total) * 100
 
         # Кросс-валидация
         model.eval()
@@ -515,7 +512,6 @@ loss_list = []
 acc_list = []
 val_acc_list = []
 for epoch in range(number_epochs_final):
-    train_acc = 0
     for i, (images, labels) in enumerate(train_loader):
 
         images = images.to(device)  # Перенос данных на устройство
