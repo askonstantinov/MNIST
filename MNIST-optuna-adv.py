@@ -49,6 +49,7 @@ def objective(trial, number_epochs_optuna, criterion_optuna):
         def forward(self, x):
             x = self.conv_layers(x)
             x = x.reshape(x.size(0), -1)
+            x = x.shape[1]
             return x
 
     class MyModel(nn.Module):
@@ -56,7 +57,7 @@ def objective(trial, number_epochs_optuna, criterion_optuna):
             super(MyModel, self).__init__()
             self.conv_layers = nn.Sequential(*conv_layers)
             self.fc1_in = output_prepare
-            self.fc1_out = trial.suggest_int("fc1_out", 100, 10000)
+            self.fc1_out = trial.suggest_int("fc1_out", 100, 4000)
             self.fc1 = nn.Linear(self.fc1_in, self.fc1_out)
             self.drop_out = nn.Dropout(p=0.5)
             self.fc2 = nn.Linear(self.fc1_out, 10)
@@ -71,36 +72,28 @@ def objective(trial, number_epochs_optuna, criterion_optuna):
 
 
     # Определим сверточные слои
+    n_layers = trial.suggest_int("n_layers", 1, 12)  # Определение числа сверточных слоев
     conv_layers = []
-    n_layers = trial.suggest_int("n_layers", 1, 24)  # Определение числа сверточных слоев
     # Создание слоев
     for i in range(n_layers):
         in_channels = 1 if i == 0 else conv_layers[-3].out_channels
-        out_channels = trial.suggest_int(f"out_channels_{i}", 32, 128, step=4)
+        out_channels = trial.suggest_int(f"out_channels_{i}", 32, 64, step=4)
         kernel_size = trial.suggest_int(f"kernel_size_{i}", 3, 7, step=2)
         stride_size = 1
         padding_size = int(kernel_size / 2)
         leakyrelu = trial.suggest_float(f"leakyrelu_{i}", 1e-03, 9e-01, log=True)
+        maxpool_kernel_size = trial.suggest_int(f'maxpool_kernel_size_{i}', 1, 2)
+        maxpool_stride_size = trial.suggest_int(f'maxpool_stride_size_{i}', 1, 2)
 
-        # Добавляем MaxPooling после первого слоя
-        if 0 < i <= 2:
-            maxpool_kernel_size = trial.suggest_int(f'maxpool_kernel_size_{i}', 2, 4, step=2)
-            maxpool_stride_size = trial.suggest_int(f'maxpool_stride_size_{i}', 1, 4)
-            conv_layers.append(nn.MaxPool2d(kernel_size=maxpool_kernel_size, stride=maxpool_stride_size))
-
-        conv_layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride_size,
-                                     padding=padding_size))
-        conv_layers.append(nn.BatchNorm2d(out_channels))
+        conv_layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride_size, padding=padding_size))
         conv_layers.append(nn.LeakyReLU(negative_slope=leakyrelu))
+        conv_layers.append(nn.MaxPool2d(kernel_size=maxpool_kernel_size, stride=maxpool_stride_size))
 
-    # Теперь подготовка к соединению с полносвязными слоями
+    # Подготовка к соединению с полносвязными слоями
     model_prepare = MyModelPrepare(conv_layers)
-    # Задаем входной размер
-    input_tensor = torch.randn(1, 1, 28, 28)
-    # Вычисляем размерность для входа в первый слой fc
     with torch.no_grad():
+        input_tensor = torch.randn(1, 1, 28, 28)
         output_prepare = model_prepare(input_tensor)
-        output_prepare = output_prepare.shape[1]
 
     # Создадим итоговую модель
     model = MyModel(conv_layers, output_prepare)
@@ -140,6 +133,7 @@ def objective(trial, number_epochs_optuna, criterion_optuna):
             correct = (predicted == labels).sum().item()
             acc_list.append(correct / total)
 
+            '''
             if batch_size_optuna >= total_step and (i + 1) == total_step:
                 print('Optuna Train Epoch [{}/{}], Step [{}/{}], SUPER Batch = Total steps [{}], Loss: {:.4f}, Optuna Train Accuracy: {:.2f} %'
                       .format(epoch + 1, num_epochs_optuna, i + 1, total_step,
@@ -152,6 +146,7 @@ def objective(trial, number_epochs_optuna, criterion_optuna):
                 print('Optuna Train Epoch [{}/{}], Step [{}/{}], RESIDUAL Batch [{}/{}], Loss: {:.4f}, Optuna Train Accuracy: {:.2f} %'
                      .format(epoch + 1, num_epochs_optuna, i + 1, total_step, (int((i + 1) / batch_size_optuna)) + 1,
                               math.ceil(total_step / batch_size_optuna), loss.item(), (correct / total) * 100))
+            '''
 
         # Кросс-валидация
         model.eval()
@@ -197,18 +192,18 @@ def objective(trial, number_epochs_optuna, criterion_optuna):
     return test_accuracy
 
 # Ввод значений параметров и запуск Optuna
-number_epochs_optuna = 10
+number_epochs_optuna = 5
 # Loss
 criterion = nn.CrossEntropyLoss()
 
-study = optuna.create_study(sampler=optuna.samplers.TPESampler(n_startup_trials=40),
+study = optuna.create_study(sampler=optuna.samplers.TPESampler(n_startup_trials=30),
                             pruner=optuna.pruners.HyperbandPruner(),
                             direction='maximize')
 study.optimize(lambda trial: objective(trial, number_epochs_optuna, criterion),
                n_trials=201)  # желательно задавать >100 trials
 
 # Вывод результатов
-print(f"Номер лучшей попытки: {study.best_trial.number}")
+print(f"Номер лучшей попытки: Trial {study.best_trial.number}")
 print(f"Лучшая точность: {study.best_value}")
 print(f"Лучшие параметры: {study.best_params}")
 print(f"Количество обрезанных (pruned) trials: {len(study.get_trials(deepcopy=False, states=[optuna.trial.TrialState.PRUNED]))}")
@@ -254,6 +249,7 @@ class MyModelPrepare(nn.Module):
     def forward(self, x):
         x = self.conv_layers(x)
         x = x.reshape(x.size(0), -1)
+        x = x.shape[1]
         return x
 
 
@@ -277,34 +273,29 @@ class MyModel(nn.Module):
 
 
 # Определим сверточные слои
-conv_layers = []
 n_layers = n_layers  # Определение числа слоев
+conv_layers = []
 # Создание слоев
 for i in range(n_layers):
-    in_channels = 1 if i == 0 else conv_layers[-3].out_channels
+    in_channels = 1 if i == 0 else conv_layers[-4].out_channels
     out_channels = best_params['out_channels' + str(f'_{i}')]
     kernel_size = best_params['kernel_size' + str(f'_{i}')]
     stride_size = 1
     padding_size = int(kernel_size / 2)
     leakyrelu = best_params['leakyrelu' + str(f'_{i}')]
+    maxpool_kernel_size = best_params['maxpool_kernel_size' + str(f'_{i}')]
+    maxpool_stride_size = best_params['maxpool_stride_size' + str(f'_{i}')]
 
-    # Добавляем MaxPooling после первого слоя
-    if 0 < i <= 2:
-        maxpool_kernel_size = best_params['maxpool_kernel_size' + str(f'_{i}')]
-        maxpool_stride_size = best_params['maxpool_stride_size' + str(f'_{i}')]
-        conv_layers.append(nn.MaxPool2d(kernel_size=maxpool_kernel_size, stride=maxpool_stride_size))
-
-    conv_layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride_size,
-                                 padding=padding_size))
+    conv_layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride_size, padding=padding_size))
     conv_layers.append(nn.BatchNorm2d(out_channels))
     conv_layers.append(nn.LeakyReLU(negative_slope=leakyrelu))
+    conv_layers.append(nn.MaxPool2d(kernel_size=maxpool_kernel_size, stride=maxpool_stride_size))
 
-# Теперь подготовка к соединению с полносвязными слоями (по аналогии с процессом Optuna выше)
+# Подготовка к соединению с полносвязными слоями
 model_prepare = MyModelPrepare(conv_layers)
-input_tensor = torch.randn(1, 1, 28, 28)
 with torch.no_grad():
+    input_tensor = torch.randn(1, 1, 28, 28)
     output_prepare = model_prepare(input_tensor)
-    output_prepare = output_prepare.shape[1]
 
 # Создадим итоговую модель
 model = MyModel(conv_layers, output_prepare)
