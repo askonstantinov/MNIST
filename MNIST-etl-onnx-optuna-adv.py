@@ -14,6 +14,7 @@ from onnx2torch import convert
 import onnxruntime as ort
 import optuna
 import math
+from torch.utils.data import random_split
 
 
 # Проверка доступности GPU
