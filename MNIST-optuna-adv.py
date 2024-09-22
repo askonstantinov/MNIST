@@ -20,8 +20,13 @@ print(f"Используемое устройство: {device}")
 def objective(trial, number_epochs_optuna, criterion_optuna):
     # Fixed hyperparameters needed for training
     num_epochs_optuna = number_epochs_optuna
-    learning_rate_optuna = 1e-3
-    batch_size_optuna = 32
+    learning_rate_optuna = 0.00012125747732631978
+    batch_size_optuna = 128
+
+    adam_betas1 = 0.8447311629853445
+    adam_betas2 = 0.9995301881902142
+    adam_eps = 4.578951182620495e-09
+    adam_weight_decay = 1.3005998870242143e-05
 
     # Формирование массивов данных MNIST
     # Specific for MNIST integrated into PyTorch
@@ -57,7 +62,7 @@ def objective(trial, number_epochs_optuna, criterion_optuna):
             super(MyModel, self).__init__()
             self.conv_layers = nn.Sequential(*conv_layers)
             self.fc1_in = output_prepare
-            self.fc1_out = trial.suggest_int("fc1_out", 100, 4000)
+            self.fc1_out = trial.suggest_int("fc1_out", 256, 1024, step=256)
             self.fc1 = nn.Linear(self.fc1_in, self.fc1_out)
             self.drop_out = nn.Dropout(p=0.5)
             self.fc2 = nn.Linear(self.fc1_out, 10)
@@ -72,18 +77,18 @@ def objective(trial, number_epochs_optuna, criterion_optuna):
 
 
     # Определим сверточные слои
-    n_layers = trial.suggest_int("n_layers", 1, 12)  # Определение числа сверточных слоев
+    n_layers = trial.suggest_int("n_layers", 4, 6)  # Определение числа сверточных слоев
     conv_layers = []
     # Создание слоев
     for i in range(n_layers):
         in_channels = 1 if i == 0 else conv_layers[-3].out_channels
-        out_channels = trial.suggest_int(f"out_channels_{i}", 32, 64, step=4)
+        out_channels = trial.suggest_int(f"out_channels_{i}", 32, 256, step=32)
         kernel_size = trial.suggest_int(f"kernel_size_{i}", 3, 7, step=2)
         stride_size = 1
         padding_size = int(kernel_size / 2)
         leakyrelu = trial.suggest_float(f"leakyrelu_{i}", 1e-03, 9e-01, log=True)
-        maxpool_kernel_size = 2 if 0 < i <= 2 else 1
-        maxpool_stride_size = 2 if 0 < i <= 2 else 1
+        maxpool_kernel_size = 2 if i == 1 or i == 3 or i == 4 else 1
+        maxpool_stride_size = 2 if i == 1 or i == 3 or i == 4 else 1
 
         conv_layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride_size, padding=padding_size))
         conv_layers.append(nn.LeakyReLU(negative_slope=leakyrelu))
@@ -101,7 +106,7 @@ def objective(trial, number_epochs_optuna, criterion_optuna):
     print('model=', model)
 
     # Определение оптимизатора
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate_optuna)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate_optuna, betas=(adam_betas1, adam_betas2), eps=adam_eps, weight_decay=adam_weight_decay)
 
     # Loss
     criterion = criterion_optuna
@@ -192,15 +197,15 @@ def objective(trial, number_epochs_optuna, criterion_optuna):
     return test_accuracy
 
 # Ввод значений параметров и запуск Optuna
-number_epochs_optuna = 5
+number_epochs_optuna = 30
 # Loss
 criterion = nn.CrossEntropyLoss()
 
-study = optuna.create_study(sampler=optuna.samplers.TPESampler(n_startup_trials=30),
+study = optuna.create_study(sampler=optuna.samplers.TPESampler(n_startup_trials=50),
                             pruner=optuna.pruners.HyperbandPruner(),
                             direction='maximize')
 study.optimize(lambda trial: objective(trial, number_epochs_optuna, criterion),
-               n_trials=201)  # желательно задавать >100 trials
+               n_trials=701)  # желательно задавать >100 trials
 
 # Вывод результатов
 print(f"Номер лучшей попытки: Trial {study.best_trial.number}")
@@ -212,9 +217,14 @@ print(f"Количество обрезанных (pruned) trials: {len(study.ge
 
 # Обучение модели с лучшими параметрами
 # Ввод прочих параметров
-number_epochs_final = 20
-learning_rate_final = 1e-4
-batch_size_final = 32
+number_epochs_final = 30
+learning_rate_final = 0.00012125747732631978
+batch_size_final = 128
+
+adam_betas1 = 0.8447311629853445
+adam_betas2 = 0.9995301881902142
+adam_eps = 4.578951182620495e-09
+adam_weight_decay = 1.3005998870242143e-05
 
 # Полноценное обучение с наилучшей комбинацией ГП от Optuna
 
@@ -283,8 +293,8 @@ for i in range(n_layers):
     stride_size = 1
     padding_size = int(kernel_size / 2)
     leakyrelu = best_params['leakyrelu' + str(f'_{i}')]
-    maxpool_kernel_size = 2 if 0 < i <= 2 else 1
-    maxpool_stride_size = 2 if 0 < i <= 2 else 1
+    maxpool_kernel_size = 2 if i == 1 or i == 3 or i == 4 else 1
+    maxpool_stride_size = 2 if i == 1 or i == 3 or i == 4 else 1
 
     conv_layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride_size, padding=padding_size))
     conv_layers.append(nn.LeakyReLU(negative_slope=leakyrelu))
@@ -302,7 +312,7 @@ model.to(device)  # Перенос модели на устройство GPU
 print('model=', model)
 
 # Определение оптимизатора
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate_final)
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate_final, betas=(adam_betas1, adam_betas2), eps=adam_eps, weight_decay=adam_weight_decay)
 
 # Обучение модели для выбранной конфигурации гиперпараметров Optuna
 total_step = len(train_loader)
@@ -386,7 +396,7 @@ torch_input = torch.randn(1, 1, 28, 28, device=device)
 torch.onnx.export(
     model,  # PyTorch model
     (torch_input,),  # Input data
-    'output_onnx/mnist-custom_1.onnx',  # Output ONNX file
+    'output_onnx/mnist-custom_3.onnx',  # Output ONNX file
     input_names=['input'],  # Names for the input
     output_names=['output'],  # Names for the output
     dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}},
@@ -394,7 +404,7 @@ torch.onnx.export(
 )
 
 # Plot for training process
-p = figure(y_axis_label='Loss', width=850, y_range=(0, 1), title='PyTorch ConvNet results')
+p = figure(y_axis_label='Loss', width=1700, y_range=(0, 1), title='PyTorch ConvNet results')
 p.extra_y_ranges = {'Accuracy': Range1d(start=0, end=100)}
 p.add_layout(LinearAxis(y_range_name='Accuracy', axis_label='Accuracy (%)'), 'right')
 p.line(np.arange(len(loss_list)), loss_list)
