@@ -24,12 +24,12 @@ print(f"Используемое устройство: {device}")
 # Целевая функция Optuna
 def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_optuna):
     # Range of hyperparameters to choose from Optuna (2)
-    batch_size = trial.suggest_int('batch_size', 32, 256, step=32)  # при batch_size>total_step будет batch_size=total_step
-    learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-3, log=True)
+    batch_size = trial.suggest_categorical('batch_size', [32, 64, 128, 256])  # при batch_size>total_step будет batch_size=total_step
+    learning_rate = trial.suggest_float('learning_rate', 1e-6, 1e-3, log=True)
     adam_betas1 = trial.suggest_float('adam_betas1', 1e-1, 99e-2)
     adam_betas2 = trial.suggest_float('adam_betas2', 999e-3, 999999e-6)
     adam_eps = trial.suggest_float('adam_eps', 1e-10, 1e-6, log=True)
-    adam_weight_decay = trial.suggest_float('adam_weight_decay', 1e-6, 1e-2, log=True)
+    adam_weight_decay = trial.suggest_float('adam_weight_decay', 1e-8, 1e-1, log=True)
 
     # Fixed hyperparameters needed for training
     num_epochs_optuna = number_epochs_optuna
@@ -151,12 +151,12 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
     return test_accuracy
 
 # Ввод значений параметров и запуск Optuna
-onnxpath = 'output_onnx/mnist-custom_1.onnx'
-number_epochs_optuna = 5
+onnxpath = 'output_onnx/mnist-custom_3.onnx'
+number_epochs_optuna = 10
 # Loss
 criterion = nn.CrossEntropyLoss()
 
-study = optuna.create_study(sampler=optuna.samplers.TPESampler(n_startup_trials=40),
+study = optuna.create_study(sampler=optuna.samplers.TPESampler(n_startup_trials=50),
                             pruner=optuna.pruners.HyperbandPruner(),
                             direction='maximize')
 study.optimize(lambda trial: objective(trial, onnxpath, number_epochs_optuna, criterion),
@@ -172,7 +172,7 @@ print(f"Количество обрезанных (pruned) trials: {len(study.ge
 
 # Обучение модели с лучшими параметрами
 # Ввод прочих параметров
-number_epochs_final = 20
+number_epochs_final = 30
 
 # Ввод определенных Optuna лучших параметров
 best_params = study.best_params
@@ -295,7 +295,7 @@ torch_input = torch.randn(1, 1, 28, 28, device=device)
 torch.onnx.export(
     model,  # PyTorch model
     (torch_input,),  # Input data
-    'output_onnx/mnist-custom_2.onnx',  # Output ONNX file
+    'output_onnx/mnist-custom_4.onnx',  # Output ONNX file
     input_names=['input'],  # Names for the input
     output_names=['output'],  # Names for the output
     dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}},

@@ -83,7 +83,7 @@ def objective(trial, number_epochs_optuna, criterion_optuna):
 
     for i in range(n_layers_fc):
         in_features = 7840 if i == 0 else fc_layers[-1].out_features
-        out_features = trial.suggest_categorical(f"fc_out_{i}", [128, 256, 512, 1024, 2048])
+        out_features = trial.suggest_categorical(f"fc_out_{i}", [128, 256, 512, 1024])
         fc_layers.append(nn.Linear(in_features, out_features))
 
     # Создадим итоговую модель
@@ -189,12 +189,12 @@ criterion = nn.CrossEntropyLoss()
 
 search_space = {
     'n_layers_fc': [1, 2],  # Число полносвязных слоев
-    'fc_out_0': [128, 256, 512, 1024, 2048],  # Размерность выходного слоя для первого полносвязного слоя
-    'fc_out_1': [128, 256, 512, 1024, 2048],  # Размерность выходного слоя для второго полносвязного слоя
+    'fc_out_0': [128, 256, 512, 1024],  # Размерность выходного слоя для первого полносвязного слоя
+    'fc_out_1': [128, 256, 512, 1024],  # Размерность выходного слоя для второго полносвязного слоя
 }
 
 study = optuna.create_study(sampler=optuna.samplers.GridSampler(search_space), direction='maximize')
-study.optimize(lambda trial: objective(trial, number_epochs_optuna, criterion), n_trials=30)
+study.optimize(lambda trial: objective(trial, number_epochs_optuna, criterion), n_trials=20)
 
 # Вывод результатов
 print(f"Номер лучшей попытки: Trial {study.best_trial.number}")
