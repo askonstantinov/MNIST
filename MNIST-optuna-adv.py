@@ -66,7 +66,7 @@ def objective(trial, number_epochs_optuna, criterion_optuna):
 
 
     # Определим слои
-    n_layers_fc = trial.suggest_int("n_layers", 1, 2)  # Определение числа полносвязных слоев
+    n_layers_fc = trial.suggest_int("n_layers_fc", 1, 2)  # Определение числа полносвязных слоев
     conv_layers = []
     fc_layers = []
     # Создание слоев
@@ -187,11 +187,14 @@ number_epochs_optuna = 30
 # Loss
 criterion = nn.CrossEntropyLoss()
 
-study = optuna.create_study(sampler=optuna.samplers.TPESampler(n_startup_trials=50),
-                            pruner=optuna.pruners.HyperbandPruner(),
-                            direction='maximize')
-study.optimize(lambda trial: objective(trial, number_epochs_optuna, criterion),
-               n_trials=501)  # желательно задавать >100 trials
+search_space = {
+    'n_layers_fc': [1, 2],  # Число полносвязных слоев
+    'fc_out_0': [128, 256, 512, 1024, 2048],  # Размерность выходного слоя для первого полносвязного слоя
+    'fc_out_1': [128, 256, 512, 1024, 2048],  # Размерность выходного слоя для второго полносвязного слоя
+}
+
+study = optuna.create_study(sampler=optuna.samplers.GridSampler(search_space), direction='maximize')
+study.optimize(lambda trial: objective(trial, number_epochs_optuna, criterion), n_trials=30)
 
 # Вывод результатов
 print(f"Номер лучшей попытки: Trial {study.best_trial.number}")
