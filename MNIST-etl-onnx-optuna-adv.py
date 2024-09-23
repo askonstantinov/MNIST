@@ -43,20 +43,14 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
     # MNIST 70000 images dataset (60000 images for train, and 10000 images for test)
     train_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=True, transform=trans, download=True)
     test_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=False, transform=trans)
-    # Разделение на обучающий, валидационный и тестовый наборы (в соотношении приблизительно 70%-15%-15%)
-    train_size = 50000
-    val_size = 10000
-    train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
     # Loaders
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False)
     test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
     # Задаем модель нейросети для Optuna (импорт из onnx)
     onnx_model = onnx.load(path_to_onnx_model_optuna)  # Загрузка модели из ONNX
     model = convert(onnx_model)  # Подготовка к дообучению
     model.to(device)  # Перенос модели на устройство GPU
-    print('model=', model)
 
     # Определение оптимизатора
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(adam_betas1, adam_betas2), eps=adam_eps, weight_decay=adam_weight_decay)
@@ -69,8 +63,8 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
     total_step = len(train_loader)
     loss_list = []
     acc_list = []
-    val_acc_list = []
     for epoch in range(num_epochs_optuna):
+        train_acc = 0
         for i, (images, labels) in enumerate(train_loader):
 
             images = images.to(device)  # Перенос данных на устройство GPU
@@ -92,41 +86,12 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
             correct = (predicted == labels).sum().item()
             acc_list.append(correct / total)
 
-            '''
-            if batch_size >= total_step and (i + 1) == total_step:
-                print('Optuna Train Epoch [{}/{}], Step [{}/{}], SUPER Batch = Total steps [{}], Loss: {:.4f}, Optuna Accuracy: {:.2f}%'
-                      .format(epoch + 1, num_epochs_optuna, i + 1, total_step,
-                              total_step, loss.item(), (correct / total) * 100))
-            elif (i + 1) % batch_size == 0:
-                print('Optuna Train Epoch [{}/{}], Step [{}/{}], Batch [{}/{}], Loss: {:.4f}, Optuna Accuracy: {:.2f}%'
-                      .format(epoch + 1, num_epochs_optuna, i + 1, total_step, int((i + 1) / batch_size),
-                              math.ceil(total_step / batch_size), loss.item(), (correct / total) * 100))
-            elif (i + 1) == total_step:
-                print('Optuna Train Epoch [{}/{}], Step [{}/{}], RESIDUAL Batch [{}/{}], Loss: {:.4f}, Optuna Accuracy: {:.2f}%'
-                      .format(epoch + 1, num_epochs_optuna, i + 1, total_step, (int((i + 1) / batch_size)) + 1,
-                              math.ceil(total_step / batch_size), loss.item(), (correct / total) * 100))
-            '''
+            train_acc_step = (correct / total) * 100
+            train_acc += train_acc_step
+            train_acc_aver = train_acc / (i + 1)
 
-        # Кросс-валидация
-        model.eval()
-        with torch.no_grad():
-            correct = 0
-            total = 0
-            for images, labels in val_loader:
-
-                images = images.to(device)  # Перенос данных на устройство GPU
-                labels = labels.to(device)  # Перенос меток на устройство GPU
-
-                outputs = model(images)
-                _, predicted = torch.max(outputs.data, 1)
-                total += labels.size(0)
-                correct += (predicted == labels).sum().item()
-
-            val_acc = correct / total
-            val_acc_list.append(val_acc)
-            print(f"########################### Optuna Cross-Validation Accuracy: {(val_acc * 100):.2f} %")
-
-        trial.report(val_acc, epoch)
+        print(f"train_acc_aver: {train_acc_aver:.2f} %")
+        trial.report(train_acc_aver, epoch)
         if trial.should_prune():
             raise optuna.exceptions.TrialPruned()
 
@@ -151,7 +116,7 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
     return test_accuracy
 
 # Ввод значений параметров и запуск Optuna
-onnxpath = 'output_onnx/mnist-custom_3.onnx'
+onnxpath = 'output_onnx/mnist-custom_single_run_1.onnx'
 number_epochs_optuna = 10
 # Loss
 criterion = nn.CrossEntropyLoss()
@@ -194,13 +159,8 @@ trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,
 # MNIST 70000 images dataset (60000 images for train, and 10000 images for test)
 train_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=True, transform=trans, download=True)
 test_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=False, transform=trans)
-# Разделение на обучающий, валидационный и тестовый наборы (в соотношении приблизительно 70%-15%-15%)
-train_size = 50000
-val_size = 10000
-train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
-# Loaders
+# Data loader
 train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False)
 test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
 # Подгрузка исходной модели onnx
@@ -219,7 +179,6 @@ print('optimizer=', optimizer)
 total_step = len(train_loader)
 loss_list = []
 acc_list = []
-val_acc_list = []
 for epoch in range(number_epochs_final):
     for i, (images, labels) in enumerate(train_loader):
 
@@ -256,30 +215,14 @@ for epoch in range(number_epochs_final):
                   .format(epoch + 1, number_epochs_final, i + 1, total_step, (int((i + 1) / batch_size)) + 1,
                           math.ceil(total_step / batch_size), loss.item(), (correct / total) * 100))
 
-# Кросс-валидация
+# Test the model
 model.eval()
+
 with torch.no_grad():
     correct = 0
     total = 0
     for images, labels in test_loader:
-        images = images.to(device)  # Перенос данных на устройство GPU
-        labels = labels.to(device)  # Перенос меток на устройство GPU
 
-        outputs = model(images)
-        _, predicted = torch.max(outputs.data, 1)
-        total += labels.size(0)
-        correct += (predicted == labels).sum().item()
-
-    val_acc = correct / total
-    val_acc_list.append(val_acc)
-    print(f"########################### Cross-Validation Accuracy: {(val_acc * 100):.2f} %")
-
-# Тестирование модели
-model.eval()
-with torch.no_grad():
-    correct = 0
-    total = 0
-    for images, labels in test_loader:
         images = images.to(device)  # Перенос данных на устройство GPU
         labels = labels.to(device)  # Перенос меток на устройство GPU
 
@@ -303,7 +246,7 @@ torch.onnx.export(
 )
 
 # Plot for training process
-p = figure(y_axis_label='Loss', width=850, y_range=(0, 1), title='PyTorch ConvNet results')
+p = figure(y_axis_label='Loss', width=1700, y_range=(0, 1), title='PyTorch ConvNet results')
 p.extra_y_ranges = {'Accuracy': Range1d(start=0, end=100)}
 p.add_layout(LinearAxis(y_range_name='Accuracy', axis_label='Accuracy (%)'), 'right')
 p.line(np.arange(len(loss_list)), loss_list)
