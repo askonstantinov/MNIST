@@ -29,6 +29,8 @@ onnx_model = onnx.load(onnx_model_path)
 # Extract parameters from onnx into pytorch
 torch_model = convert(onnx_model)
 model = torch_model
+model.to(device)  # Перенос модели на устройство GPU
+print('model=', model)
 
 # Hyperparameters for training
 num_epochs = 5
