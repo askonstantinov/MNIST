@@ -23,7 +23,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Используемое устройство: {device}")
 
 # Load onnx
-onnx_model_path = 'output_onnx/mnist-custom_piecewise_1.onnx.onnx'
+onnx_model_path = 'output_onnx/mnist-custom_piecewise_1.onnx'
 onnx_model = onnx.load(onnx_model_path)
 
 # Extract parameters from onnx into pytorch
