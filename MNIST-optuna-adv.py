@@ -58,35 +58,48 @@ def objective(trial, number_epochs_optuna, criterion_optuna):
             return x
 
     class MyModel(nn.Module):
-        def __init__(self, conv_layers, output_prepare):
+        def __init__(self, conv_layers, fc_layers):
             super(MyModel, self).__init__()
             self.conv_layers = nn.Sequential(*conv_layers)
-            self.fc1_in = output_prepare
-            self.fc1_out = trial.suggest_int("fc1_out", 256, 1024, step=256)
-            self.fc1 = nn.Linear(self.fc1_in, self.fc1_out)
+            self.fc_layers = nn.Sequential(*fc_layers)
             self.drop_out = nn.Dropout(p=0.5)
-            self.fc2 = nn.Linear(self.fc1_out, 10)
+            self.fc_end = nn.Linear(fc_layers[-2].out_features, 10)
 
         def forward(self, x):
             x = self.conv_layers(x)
             x = x.reshape(x.size(0), -1)
-            x = self.fc1(x)
+            x = self.fc_layers(x)
             x = self.drop_out(x)
-            x = self.fc2(x)
+            x = self.fc_end(x)
             return x
 
 
-    # Определим сверточные слои
-    n_layers = trial.suggest_int("n_layers", 4, 6)  # Определение числа сверточных слоев
+    # Определим слои
+    n_layers_conv = 4
+    n_layers_fc = trial.suggest_int("n_layers", 1, 3)  # Определение числа полносвязных слоев
     conv_layers = []
+    fc_layers = []
     # Создание слоев
-    for i in range(n_layers):
+    for i in range(n_layers_conv):
         in_channels = 1 if i == 0 else conv_layers[-3].out_channels
-        out_channels = trial.suggest_int(f"out_channels_{i}", 32, 256, step=32)
-        kernel_size = trial.suggest_int(f"kernel_size_{i}", 3, 7, step=2)
         stride_size = 1
+        if i == 0:
+            out_channels = 224
+            kernel_size = 5
+            leakyrelu = 0.012921133981887153
+        elif i == 1:
+            out_channels = 224
+            kernel_size = 7
+            leakyrelu = 0.12110839449567463
+        elif i == 2:
+            out_channels = 224
+            kernel_size = 7
+            leakyrelu = 0.03359161678276241
+        elif i == 3:
+            out_channels = 160
+            kernel_size = 5
+            leakyrelu = 0.09512672917154825
         padding_size = int(kernel_size / 2)
-        leakyrelu = trial.suggest_float(f"leakyrelu_{i}", 1e-03, 9e-01, log=True)
         maxpool_kernel_size = 2 if i == 1 or i == 3 or i == 4 else 1
         maxpool_stride_size = 2 if i == 1 or i == 3 or i == 4 else 1
 
@@ -100,8 +113,15 @@ def objective(trial, number_epochs_optuna, criterion_optuna):
         input_tensor = torch.randn(1, 1, 28, 28)
         output_prepare = model_prepare(input_tensor)
 
+    for j in range(n_layers_fc):
+        in_features = output_prepare if j == 0 else fc_layers[-2].out_features
+        out_features = trial.suggest_int(f"fc_out_{j}", 128, 2048, step=32)
+
+        fc_layers.append(nn.Linear(in_features, out_features))
+        fc_layers.append(nn.ReLU())
+
     # Создадим итоговую модель
-    model = MyModel(conv_layers, output_prepare)
+    model = MyModel(conv_layers, fc_layers)
     model.to(device)  # Перенос модели на устройство GPU
     print('model=', model)
 
@@ -205,7 +225,7 @@ study = optuna.create_study(sampler=optuna.samplers.TPESampler(n_startup_trials=
                             pruner=optuna.pruners.HyperbandPruner(),
                             direction='maximize')
 study.optimize(lambda trial: objective(trial, number_epochs_optuna, criterion),
-               n_trials=701)  # желательно задавать >100 trials
+               n_trials=501)  # желательно задавать >100 trials
 
 # Вывод результатов
 print(f"Номер лучшей попытки: Trial {study.best_trial.number}")
@@ -248,8 +268,8 @@ test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size_final, shuf
 
 # Ввод определенных Optuna лучших параметров
 best_params = study.best_params
-fc1_out = best_params['fc1_out']
-n_layers = best_params['n_layers']
+n_layers_conv = 4
+n_layers_fc = best_params['n_layers_fc']
 
 class MyModelPrepare(nn.Module):
     def __init__(self, conv_layers):
@@ -264,39 +284,53 @@ class MyModelPrepare(nn.Module):
 
 
 class MyModel(nn.Module):
-    def __init__(self, conv_layers, output_prepare):
+    def __init__(self, conv_layers, fc_layers):
         super(MyModel, self).__init__()
         self.conv_layers = nn.Sequential(*conv_layers)
-        self.fc1_in = output_prepare
-        self.fc1_out = fc1_out
-        self.fc1 = nn.Linear(self.fc1_in, self.fc1_out)
+        self.fc_layers = nn.Sequential(*fc_layers)
         self.drop_out = nn.Dropout(p=0.5)
-        self.fc2 = nn.Linear(self.fc1_out, 10)
+        self.fc_end = nn.Linear(fc_layers[-2].out_features, 10)
 
     def forward(self, x):
         x = self.conv_layers(x)
         x = x.reshape(x.size(0), -1)
-        x = self.fc1(x)
+        x = self.fc_layers(x)
         x = self.drop_out(x)
-        x = self.fc2(x)
+        x = self.fc_end(x)
         return x
 
 
-# Определим сверточные слои
-n_layers = n_layers  # Определение числа слоев
+# Определим слои
+n_layers_conv = n_layers_conv
+n_layers_fc = n_layers_fc
 conv_layers = []
+fc_layers = []
 # Создание слоев
-for i in range(n_layers):
+for i in range(n_layers_conv):
     in_channels = 1 if i == 0 else conv_layers[-3].out_channels
-    out_channels = best_params['out_channels' + str(f'_{i}')]
-    kernel_size = best_params['kernel_size' + str(f'_{i}')]
     stride_size = 1
+    if i == 0:
+        out_channels = 224
+        kernel_size = 5
+        leakyrelu = 0.012921133981887153
+    elif i == 1:
+        out_channels = 224
+        kernel_size = 7
+        leakyrelu = 0.12110839449567463
+    elif i == 2:
+        out_channels = 224
+        kernel_size = 7
+        leakyrelu = 0.03359161678276241
+    elif i == 3:
+        out_channels = 160
+        kernel_size = 5
+        leakyrelu = 0.09512672917154825
     padding_size = int(kernel_size / 2)
-    leakyrelu = best_params['leakyrelu' + str(f'_{i}')]
     maxpool_kernel_size = 2 if i == 1 or i == 3 or i == 4 else 1
     maxpool_stride_size = 2 if i == 1 or i == 3 or i == 4 else 1
 
-    conv_layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride_size, padding=padding_size))
+    conv_layers.append(
+        nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride_size, padding=padding_size))
     conv_layers.append(nn.LeakyReLU(negative_slope=leakyrelu))
     conv_layers.append(nn.MaxPool2d(kernel_size=maxpool_kernel_size, stride=maxpool_stride_size))
 
@@ -306,8 +340,15 @@ with torch.no_grad():
     input_tensor = torch.randn(1, 1, 28, 28)
     output_prepare = model_prepare(input_tensor)
 
+for j in range(n_layers_fc):
+    in_features = output_prepare if j == 0 else fc_layers[-2].out_features
+    out_features = best_params['fc_out' + str(f'_{i}')]
+
+    fc_layers.append(nn.Linear(in_features, out_features))
+    fc_layers.append(nn.ReLU())
+
 # Создадим итоговую модель
-model = MyModel(conv_layers, output_prepare)
+model = MyModel(conv_layers, fc_layers)
 model.to(device)  # Перенос модели на устройство GPU
 print('model=', model)
 
@@ -396,7 +437,7 @@ torch_input = torch.randn(1, 1, 28, 28, device=device)
 torch.onnx.export(
     model,  # PyTorch model
     (torch_input,),  # Input data
-    'output_onnx/mnist-custom_3.onnx',  # Output ONNX file
+    'output_onnx/mnist-custom_4.onnx',  # Output ONNX file
     input_names=['input'],  # Names for the input
     output_names=['output'],  # Names for the output
     dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}},
