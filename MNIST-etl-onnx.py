@@ -12,6 +12,7 @@ import torch
 from onnx import numpy_helper
 from onnx2torch import convert
 import onnxruntime as ort
+import math
 
 
 # Извлечение модели из onnx для ее дообучения посредством onnx2torch
