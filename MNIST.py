@@ -163,7 +163,7 @@ torch.onnx.export(
 )
 
 # Save trained model into .pt
-torch.save(model.state_dict(),'output_pt/mnist-custom_single_run_1.pt')
+#torch.save(model.state_dict(),'output_pt/mnist-custom_piecewise_1.pt')
 
 # Plot for training process
 p = figure(y_axis_label='Loss', width=1700, y_range=(0, 1), title='PyTorch ConvNet results')

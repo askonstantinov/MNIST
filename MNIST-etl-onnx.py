@@ -14,17 +14,16 @@ from onnx2torch import convert
 import onnxruntime as ort
 
 
-# Скрипт на основе
-# https://neurohive.io/ru/tutorial/cnn-na-pytorch/
-# https://github.com/adventuresinML/adventures-in-ml-code/blob/master/conv_net_py_torch.py
-
 # Извлечение модели из onnx для ее дообучения посредством onnx2torch
 
 # Просмотр обученных моделей (графов) https://netron.app/
 
+# Проверка доступности GPU
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Используемое устройство: {device}")
+
 # Load onnx
-onnx_model_path = 'output_onnx/mnist-custom_1.onnx'
-#onnx_model_path = 'external_onnx/mnist.onnx'
+onnx_model_path = 'output_onnx/mnist-custom_piecewise_1.onnx.onnx'
 onnx_model = onnx.load(onnx_model_path)
 
 # Extract parameters from onnx into pytorch
@@ -32,9 +31,9 @@ torch_model = convert(onnx_model)
 model = torch_model
 
 # Hyperparameters for training
-num_epochs = 2
-batch_size = 100
-learning_rate = 0.001
+num_epochs = 5
+batch_size = 64
+learning_rate = 1e-04
 
 # Specific for MNIST integrated into PyTorch
 DATA_PATH = 'mnist-data-path'
@@ -53,7 +52,7 @@ test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=Fa
 
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.84, 0.9995), eps=4e-09, weight_decay=1e-05)
 
 # Train the model
 total_step = len(train_loader)
@@ -61,6 +60,10 @@ loss_list = []
 acc_list = []
 for epoch in range(num_epochs):
     for i, (images, labels) in enumerate(train_loader):
+
+        images = images.to(device)  # Перенос данных на устройство GPU
+        labels = labels.to(device)  # Перенос меток на устройство GPU
+
         # Run the forward pass
         outputs = model(images)
         loss = criterion(outputs, labels)
@@ -77,10 +80,21 @@ for epoch in range(num_epochs):
         correct = (predicted == labels).sum().item()
         acc_list.append(correct / total)
 
-        if (i + 1) % 100 == 0:
-            print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
-                  .format(epoch + 1, num_epochs, i + 1, total_step, loss.item(),
-                          (correct / total) * 100))
+        if batch_size >= total_step and (i + 1) == total_step:
+            print(
+                'Train Epoch [{}/{}], Step [{}/{}], SUPER Batch = Total steps [{}], Loss: {:.4f}, Train Accuracy: {:.2f} %'
+                .format(epoch + 1, num_epochs, i + 1, total_step,
+                        total_step, loss.item(), (correct / total) * 100))
+        elif (i + 1) % batch_size == 0:
+            print(
+                'Train Epoch [{}/{}], Step [{}/{}], Batch [{}/{}], Loss: {:.4f}, Train Accuracy: {:.2f} %'
+                .format(epoch + 1, num_epochs, i + 1, total_step, int((i + 1) / batch_size),
+                        math.ceil(total_step / batch_size), loss.item(), (correct / total) * 100))
+        elif (i + 1) == total_step:
+            print(
+                'Train Epoch [{}/{}], Step [{}/{}], RESIDUAL Batch [{}/{}], Loss: {:.4f}, Train Accuracy: {:.2f} %'
+                .format(epoch + 1, num_epochs, i + 1, total_step, (int((i + 1) / batch_size)) + 1,
+                        math.ceil(total_step / batch_size), loss.item(), (correct / total) * 100))
 
 # Test the model
 model.eval()
@@ -89,6 +103,10 @@ with torch.no_grad():
     correct = 0
     total = 0
     for images, labels in test_loader:
+
+        images = images.to(device)  # Перенос данных на устройство GPU
+        labels = labels.to(device)  # Перенос меток на устройство GPU
+
         outputs = model(images)
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
@@ -97,11 +115,11 @@ with torch.no_grad():
     print('Test Accuracy of the model on the 10000 test images: {} %'.format((correct / total) * 100))
 
 # Save trained model into onnx
-torch_input = torch.randn(1, 1, 28, 28)
+torch_input = torch.randn(1, 1, 28, 28, device=device)
 torch.onnx.export(
     model,  # PyTorch model
     (torch_input,),  # Input data
-    'output_onnx/mnist-custom_2.onnx',  # Output ONNX file
+    'output_onnx/mnist-custom_piecewise_2.onnx',  # Output ONNX file
     input_names=['input'],  # Names for the input
     output_names=['output'],  # Names for the output
     dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}},
@@ -109,10 +127,10 @@ torch.onnx.export(
 )
 
 # Save trained model into .pt
-# torch.save(model.state_dict(),'output_pt/mnist-custom_2.pt')
+#torch.save(model.state_dict(),'output_pt/mnist-custom_piecewise_2.pt')
 
 # Plot for training process
-p = figure(y_axis_label='Loss', width=850, y_range=(0, 1), title='PyTorch ConvNet results')
+p = figure(y_axis_label='Loss', width=1700, y_range=(0, 1), title='PyTorch ConvNet results')
 p.extra_y_ranges = {'Accuracy': Range1d(start=0, end=100)}
 p.add_layout(LinearAxis(y_range_name='Accuracy', axis_label='Accuracy (%)'), 'right')
 p.line(np.arange(len(loss_list)), loss_list)
