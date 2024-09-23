@@ -125,7 +125,7 @@ study = optuna.create_study(sampler=optuna.samplers.TPESampler(n_startup_trials=
                             pruner=optuna.pruners.HyperbandPruner(),
                             direction='maximize')
 study.optimize(lambda trial: objective(trial, onnxpath, number_epochs_optuna, criterion),
-               n_trials=1001)  # желательно задавать >100 trials
+               n_trials=501)  # желательно задавать >100 trials
 
 # Вывод результатов
 print(f"Номер лучшей попытки: Trial {study.best_trial.number}")
@@ -137,7 +137,7 @@ print(f"Количество обрезанных (pruned) trials: {len(study.ge
 
 # Обучение модели с лучшими параметрами
 # Ввод прочих параметров
-number_epochs_final = 30
+number_epochs_final = 20
 
 # Ввод определенных Optuna лучших параметров
 best_params = study.best_params
