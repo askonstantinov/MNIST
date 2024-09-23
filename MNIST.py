@@ -7,6 +7,7 @@ from bokeh.plotting import figure
 from bokeh.io import show
 from bokeh.models import LinearAxis, Range1d
 import numpy as np
+import math
 
 
 # Перед первым запуском - убедитесь, что создана виртуальная среда (например, conda).
@@ -14,17 +15,17 @@ import numpy as np
 # pip install -r requirements.txt
 # Не забудьте активировать подготовленную среду!
 
-# Скрипт на основе
-# https://neurohive.io/ru/tutorial/cnn-na-pytorch/
-# https://github.com/adventuresinML/adventures-in-ml-code/blob/master/conv_net_py_torch.py
-
 # Просмотр обученных моделей (графов) https://netron.app/
 
+# Проверка доступности GPU
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Используемое устройство: {device}")
+
 # Hyperparameters for training
-num_epochs = 4
+num_epochs = 30
 num_classes = 10
-batch_size = 32
-learning_rate = 0.000203466753304073
+batch_size = 128
+learning_rate = 0.00012125747732631978
 
 # Specific for MNIST integrated into PyTorch
 DATA_PATH = 'mnist-data-path'
@@ -46,32 +47,48 @@ class ConvNet(nn.Module):
     def __init__(self):
         super(ConvNet, self).__init__()
         self.layer1 = nn.Sequential(
-            nn.Conv2d(1, 47, kernel_size=7, stride=1, padding=3),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2))
+            nn.Conv2d(1, 224, kernel_size=5, stride=1, padding=2),
+            nn.LeakyReLU(negative_slope=0.012921133981887153),
+            nn.BatchNorm2d(224))
         self.layer2 = nn.Sequential(
-            nn.Conv2d(47, 89, kernel_size=7, stride=1, padding=3),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2))
-        self.drop_out = nn.Dropout(p=0.4)
-        self.fc1 = nn.Linear(89 * 7 * 7, 32)
-        self.fc2 = nn.Linear(32, 10)
+            nn.Conv2d(224, 224, kernel_size=7, stride=1, padding=3),
+            nn.LeakyReLU(negative_slope=0.12110839449567463),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.BatchNorm2d(224))
+        self.layer3 = nn.Sequential(
+            nn.Conv2d(224, 224, kernel_size=7, stride=1, padding=3),
+            nn.LeakyReLU(negative_slope=0.03359161678276241),
+            nn.BatchNorm2d(224))
+        self.layer4 = nn.Sequential(
+            nn.Conv2d(224, 160, kernel_size=5, stride=1, padding=2),
+            nn.LeakyReLU(negative_slope=0.09512672917154825),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.BatchNorm2d(160))
+        self.fc1 = nn.Linear(160 * 7 * 7, 1024)
+        self.fc1act = nn.LeakyReLU()
+        self.drop_out = nn.Dropout(p=0.5)
+        self.fc2 = nn.Linear(1024, 10)
 
     def forward(self, x):
-        out = self.layer1(x)
-        out = self.layer2(out)
-        out = out.reshape(out.size(0), -1)
-        out = self.drop_out(out)
-        out = self.fc1(out)
-        out = self.fc2(out)
-        return out
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = x.reshape(x.size(0), -1)
+        x = self.fc1(x)
+        x = self.fc1act(x)
+        x = self.drop_out(x)
+        x = self.fc2(x)
+        return x
 
 
 model = ConvNet()
+model.to(device)  # Перенос модели на устройство GPU
+print('model=', model)
 
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.3777652561791783, 0.9992479320325025), eps=6.749204604405833e-08, weight_decay=9.461795602386313e-06)
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.8447311629853445, 0.9995301881902142), eps=4.578951182620495e-09, weight_decay=1.3005998870242143e-05)
 
 # Train the model
 total_step = len(train_loader)
@@ -79,6 +96,10 @@ loss_list = []
 acc_list = []
 for epoch in range(num_epochs):
     for i, (images, labels) in enumerate(train_loader):
+
+        images = images.to(device)  # Перенос данных на устройство GPU
+        labels = labels.to(device)  # Перенос меток на устройство GPU
+
         # Run the forward pass
         outputs = model(images)
         loss = criterion(outputs, labels)
@@ -95,10 +116,21 @@ for epoch in range(num_epochs):
         correct = (predicted == labels).sum().item()
         acc_list.append(correct / total)
 
-        if (i + 1) % 100 == 0:
-            print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
-                  .format(epoch + 1, num_epochs, i + 1, total_step, loss.item(),
-                          (correct / total) * 100))
+        if batch_size >= total_step and (i + 1) == total_step:
+            print(
+                'Train Epoch [{}/{}], Step [{}/{}], SUPER Batch = Total steps [{}], Loss: {:.4f}, Train Accuracy: {:.2f} %'
+                .format(epoch + 1, num_epochs, i + 1, total_step,
+                        total_step, loss.item(), (correct / total) * 100))
+        elif (i + 1) % batch_size == 0:
+            print(
+                'Train Epoch [{}/{}], Step [{}/{}], Batch [{}/{}], Loss: {:.4f}, Train Accuracy: {:.2f} %'
+                .format(epoch + 1, num_epochs, i + 1, total_step, int((i + 1) / batch_size),
+                        math.ceil(total_step / batch_size), loss.item(), (correct / total) * 100))
+        elif (i + 1) == total_step:
+            print(
+                'Train Epoch [{}/{}], Step [{}/{}], RESIDUAL Batch [{}/{}], Loss: {:.4f}, Train Accuracy: {:.2f} %'
+                .format(epoch + 1, num_epochs, i + 1, total_step, (int((i + 1) / batch_size)) + 1,
+                        math.ceil(total_step / batch_size), loss.item(), (correct / total) * 100))
 
 # Test the model
 model.eval()
@@ -107,6 +139,10 @@ with torch.no_grad():
     correct = 0
     total = 0
     for images, labels in test_loader:
+
+        images = images.to(device)  # Перенос данных на устройство GPU
+        labels = labels.to(device)  # Перенос меток на устройство GPU
+
         outputs = model(images)
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
@@ -115,11 +151,11 @@ with torch.no_grad():
     print('Test Accuracy of the model on the 10000 test images: {} %'.format((correct / total) * 100))
 
 # Save trained model into onnx
-torch_input = torch.randn(1, 1, 28, 28)
+torch_input = torch.randn(1, 1, 28, 28, device=device)
 torch.onnx.export(
     model,  # PyTorch model
     (torch_input,),  # Input data
-    'output_onnx/mnist-custom_3.onnx',  # Output ONNX file
+    'output_onnx/mnist-custom_single_run_1.onnx',  # Output ONNX file
     input_names=['input'],  # Names for the input
     output_names=['output'],  # Names for the output
     dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}},
@@ -127,10 +163,10 @@ torch.onnx.export(
 )
 
 # Save trained model into .pt
-torch.save(model.state_dict(),'output_pt/mnist-custom_3.pt')
+torch.save(model.state_dict(),'output_pt/mnist-custom_single_run_1.pt')
 
 # Plot for training process
-p = figure(y_axis_label='Loss', width=850, y_range=(0, 1), title='PyTorch ConvNet results')
+p = figure(y_axis_label='Loss', width=1700, y_range=(0, 1), title='PyTorch ConvNet results')
 p.extra_y_ranges = {'Accuracy': Range1d(start=0, end=100)}
 p.add_layout(LinearAxis(y_range_name='Accuracy', axis_label='Accuracy (%)'), 'right')
 p.line(np.arange(len(loss_list)), loss_list)
