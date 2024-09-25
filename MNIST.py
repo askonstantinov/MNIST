@@ -22,7 +22,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Используемое устройство: {device}")
 
 # Hyperparameters for training
-num_epochs = 5
+num_epochs = 10
 num_classes = 10
 batch_size = 64
 learning_rate = 1e-03
@@ -88,7 +88,7 @@ print('model=', model)
 
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.84, 0.9995), eps=4e-09, weight_decay=1e-05)
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-04)
 
 # Train the model
 total_step = len(train_loader)
