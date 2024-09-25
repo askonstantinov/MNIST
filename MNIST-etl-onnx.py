@@ -24,7 +24,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Используемое устройство: {device}")
 
 # Load onnx
-onnx_model_path = 'output_onnx/mnist-custom_piecewise_2.onnx'
+onnx_model_path = 'output_onnx/mnist-custom_piecewise_3.onnx'
 onnx_model = onnx.load(onnx_model_path)
 
 # Extract parameters from onnx into pytorch
@@ -34,9 +34,9 @@ model.to(device)  # Перенос модели на устройство GPU
 print('model=', model)
 
 # Hyperparameters for training
-num_epochs = 10
-batch_size = 64
-learning_rate = 1e-05
+num_epochs = 4
+batch_size = 16
+learning_rate = 1e-06
 
 # Specific for MNIST integrated into PyTorch
 DATA_PATH = 'mnist-data-path'
@@ -55,7 +55,8 @@ test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=Fa
 
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.84, 0.9995), eps=4e-09, weight_decay=1e-05)
+#optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.84, 0.9995), eps=4e-09, weight_decay=1e-05)
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-04)
 
 # Train the model
 total_step = len(train_loader)
@@ -122,7 +123,7 @@ torch_input = torch.randn(1, 1, 28, 28, device=device)
 torch.onnx.export(
     model,  # PyTorch model
     (torch_input,),  # Input data
-    'output_onnx/mnist-custom_piecewise_3.onnx',  # Output ONNX file
+    'output_onnx/mnist-custom_piecewise_4.onnx',  # Output ONNX file
     input_names=['input'],  # Names for the input
     output_names=['output'],  # Names for the output
     dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}},
