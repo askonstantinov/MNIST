@@ -12,7 +12,11 @@ import onnx
 import onnxruntime as ort
 
 
-batch_size = 100
+# Проверка доступности GPU
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Используемое устройство: {device}")
+
+batch_size = 128
 
 # Specific for MNIST integrated into PyTorch
 DATA_PATH = 'mnist-data-path'
@@ -39,7 +43,7 @@ with torch.no_grad():
         # Инициализация onnx 
         input = torch.randn(1, 1, 28, 28)
         # Начало сессии onnxruntime
-        onnx_model_path = 'output_onnx/mnist-custom_2.onnx'
+        onnx_model_path = 'output_onnx/mnist-custom_piecewise_2.onnx'
         #onnx_model_path = 'external_onnx/mnist.onnx'
         ort_sess = ort.InferenceSession(onnx_model_path)
 
