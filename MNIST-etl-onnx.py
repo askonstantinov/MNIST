@@ -5,7 +5,8 @@ import torchvision.transforms as transforms
 import torchvision.datasets
 from bokeh.plotting import figure
 from bokeh.io import show
-from bokeh.models import LinearAxis, Range1d
+from bokeh.models import LinearAxis, Range1d, Span, Label, Legend, LegendItem, Panel
+from bokeh.models.layouts import Column, Row
 import numpy as np
 import onnx
 import torch
@@ -32,7 +33,7 @@ if torch.cuda.is_available():
     torch.backends.cudnn.benchmark = False
 
 # Load onnx
-onnx_model_path = 'output_onnx/mnist-custom_piecewise_1.onnx'
+onnx_model_path = 'output_onnx/mnist-custom_piecewise_3.onnx'
 onnx_model = onnx.load(onnx_model_path)
 
 # Extract parameters from onnx into pytorch
@@ -42,9 +43,9 @@ model.to(device)  # Перенос модели на устройство GPU
 print('model=', model)
 
 # Hyperparameters for training
-num_epochs = 2
+num_epochs = 10
 batch_size = 128
-learning_rate = 1e-05
+learning_rate = 1e-06
 
 # Specific for MNIST integrated into PyTorch
 DATA_PATH = 'mnist-data-path'
@@ -131,7 +132,7 @@ torch_input = torch.randn(1, 1, 28, 28, device=device)
 torch.onnx.export(
     model,  # PyTorch model
     (torch_input,),  # Input data
-    'output_onnx/mnist-custom_piecewise_2.onnx',  # Output ONNX file
+    'output_onnx/mnist-custom_piecewise_4.onnx',  # Output ONNX file
     input_names=['input'],  # Names for the input
     output_names=['output'],  # Names for the output
     dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}},
@@ -145,6 +146,22 @@ torch.onnx.export(
 p = figure(y_axis_label='Loss', width=1700, y_range=(0, 1), title='PyTorch ConvNet results')
 p.extra_y_ranges = {'Accuracy': Range1d(start=0, end=100)}
 p.add_layout(LinearAxis(y_range_name='Accuracy', axis_label='Accuracy (%)'), 'right')
-p.line(np.arange(len(loss_list)), loss_list)
-p.line(np.arange(len(loss_list)), np.array(acc_list) * 100, y_range_name='Accuracy', color='red')
+
+# График потерь (loss_list) и точности обучения (acc_list)
+p = figure(y_axis_label='Loss', width=1700, y_range=(0, 1), title='PyTorch ConvNet results')
+p.extra_y_ranges = {'Accuracy': Range1d(start=0, end=100)}
+p.add_layout(LinearAxis(y_range_name='Accuracy', axis_label='Accuracy (%)'), 'right')
+p.line(np.arange(len(loss_list)), loss_list, legend_label="Train Loss", line_color="blue")
+p.line(np.arange(len(acc_list)), np.array(acc_list) * 100, y_range_name='Accuracy', legend_label="Train Accuracy", line_color="red")
+
+# Добавляем вертикальные линии для обозначения эпох
+for i in range(1, (num_epochs + 1)):
+    x = i * total_step
+    p.add_layout(Span(location=x, dimension='height', line_color='green', line_width=1))
+
+    # Добавляем подписи к линиям
+    label = Label(x=x, y=1, text=f"+{i}", text_align='right')
+    p.add_layout(label)
+
+# Показываем график
 show(p)
