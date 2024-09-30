@@ -33,7 +33,7 @@ if torch.cuda.is_available():
     torch.backends.cudnn.benchmark = False
 
 # Load onnx
-onnx_model_path = 'output_onnx/mnist-custom_piecewise_3.onnx'
+onnx_model_path = 'output_onnx/mnist-custom_piecewise_2.onnx'
 onnx_model = onnx.load(onnx_model_path)
 
 # Extract parameters from onnx into pytorch
@@ -43,9 +43,9 @@ model.to(device)  # Перенос модели на устройство GPU
 print('model=', model)
 
 # Hyperparameters for training
-num_epochs = 10
+num_epochs = 2
 batch_size = 128
-learning_rate = 1e-06
+learning_rate = 1e-05
 
 # Specific for MNIST integrated into PyTorch
 DATA_PATH = 'mnist-data-path'
@@ -64,8 +64,8 @@ test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=Fa
 
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
-#optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.8447311629853445, 0.9995301881902142), eps=4.578951182620495e-09, weight_decay=1.3005998870242143e-05)
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-03)
+#optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
 # Train the model
 total_step = len(train_loader)
@@ -95,17 +95,17 @@ for epoch in range(num_epochs):
 
         if batch_size >= total_step and (i + 1) == total_step:
             print(
-                'Train Epoch [{}/{}], Step [{}/{}], SUPER Batch = Total steps [{}], Loss: {:.4f}, Train Accuracy: {:.2f} %'
+                'Train Epoch [{}/{}], Step [{}/{}], SUPER Batch = Total steps [{}], Loss: {:.6f}, Train Accuracy: {:.4f} %'
                 .format(epoch + 1, num_epochs, i + 1, total_step,
                         total_step, loss.item(), (correct / total) * 100))
         elif (i + 1) % batch_size == 0:
             print(
-                'Train Epoch [{}/{}], Step [{}/{}], Batch [{}/{}], Loss: {:.4f}, Train Accuracy: {:.2f} %'
+                'Train Epoch [{}/{}], Step [{}/{}], Batch [{}/{}], Loss: {:.6f}, Train Accuracy: {:.4f} %'
                 .format(epoch + 1, num_epochs, i + 1, total_step, int((i + 1) / batch_size),
                         math.ceil(total_step / batch_size), loss.item(), (correct / total) * 100))
         elif (i + 1) == total_step:
             print(
-                'Train Epoch [{}/{}], Step [{}/{}], RESIDUAL Batch [{}/{}], Loss: {:.4f}, Train Accuracy: {:.2f} %'
+                'Train Epoch [{}/{}], Step [{}/{}], RESIDUAL Batch [{}/{}], Loss: {:.6f}, Train Accuracy: {:.4f} %'
                 .format(epoch + 1, num_epochs, i + 1, total_step, (int((i + 1) / batch_size)) + 1,
                         math.ceil(total_step / batch_size), loss.item(), (correct / total) * 100))
 
@@ -132,7 +132,7 @@ torch_input = torch.randn(1, 1, 28, 28, device=device)
 torch.onnx.export(
     model,  # PyTorch model
     (torch_input,),  # Input data
-    'output_onnx/mnist-custom_piecewise_4.onnx',  # Output ONNX file
+    'output_onnx/mnist-custom_piecewise_3.onnx',  # Output ONNX file
     input_names=['input'],  # Names for the input
     output_names=['output'],  # Names for the output
     dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}},
