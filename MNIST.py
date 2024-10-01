@@ -32,7 +32,7 @@ if torch.cuda.is_available():
     torch.backends.cudnn.benchmark = False
 
 # Hyperparameters for training
-num_epochs = 10
+num_epochs = 22
 num_classes = 10
 batch_size = 128
 learning_rate = 1e-03
@@ -60,26 +60,32 @@ class ConvNet(nn.Module):
     def __init__(self):
         super(ConvNet, self).__init__()
         self.layer1 = nn.Sequential(
-            nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1),
-            nn.LeakyReLU(),
-            nn.BatchNorm2d(64))
+            nn.Conv2d(1, 224, kernel_size=5, stride=1, padding=2),
+            nn.LeakyReLU(negative_slope=0.012921133981887153),
+            nn.BatchNorm2d(224),
+            nn.Dropout(p=0.5))
         self.layer2 = nn.Sequential(
-            nn.Conv2d(64, 224, kernel_size=5, stride=1, padding=2),
+            nn.Conv2d(224, 224, kernel_size=7, stride=1, padding=3),
             nn.LeakyReLU(negative_slope=0.12110839449567463),
+            nn.BatchNorm2d(224),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.BatchNorm2d(224))
+            nn.Dropout(p=0.25))
         self.layer3 = nn.Sequential(
-            nn.Conv2d(224, 224, kernel_size=5, stride=1, padding=2),
+            nn.Conv2d(224, 224, kernel_size=7, stride=1, padding=3),
             nn.LeakyReLU(negative_slope=0.03359161678276241),
-            nn.BatchNorm2d(224))
+            nn.BatchNorm2d(224),
+            nn.Dropout(p=0.25))
         self.layer4 = nn.Sequential(
-            nn.Conv2d(224, 160, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(224, 160, kernel_size=5, stride=1, padding=2),
             nn.LeakyReLU(negative_slope=0.09512672917154825),
+            nn.BatchNorm2d(160),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.BatchNorm2d(160))
-        self.fc1 = nn.Linear(160 * 7 * 7, 1024)
-        self.drop_out = nn.Dropout(p=0.25)
-        self.fc2 = nn.Linear(1024, 10)
+            nn.Dropout(p=0.2))
+        self.fc1 = nn.Linear(7840, 1024, bias=True)
+        self.fc1act = nn.LeakyReLU()
+        self.fc1batchnorm = nn.BatchNorm1d(1024)
+        self.drop_out = nn.Dropout(p=0.5)
+        self.fc2 = nn.Linear(1024, 10, bias=True)
 
     def forward(self, x):
         x = self.layer1(x)
@@ -88,6 +94,8 @@ class ConvNet(nn.Module):
         x = self.layer4(x)
         x = x.reshape(x.size(0), -1)
         x = self.fc1(x)
+        x = self.fc1act(x)
+        x = self.fc1batchnorm(x)
         x = self.drop_out(x)
         x = self.fc2(x)
         return x
@@ -99,7 +107,7 @@ print('model=', model)
 
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-05)
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-04)
 
 # Train the model
 total_step = len(train_loader)
@@ -192,7 +200,7 @@ with torch.no_grad():
         total += labels.size(0)
         correct += (predicted == labels).sum().item()
 
-    print('Test Accuracy of the model on the 10000 test images: {} %'.format((correct / total) * 100))
+    print(f"Test Accuracy of the model on the 10000 test images: {((correct / total) * 100):.4f} %")
 
 # Save trained model into onnx
 torch_input = torch.randn(1, 1, 28, 28, device=device)
