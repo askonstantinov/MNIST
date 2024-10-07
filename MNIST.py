@@ -26,7 +26,7 @@ print(f"Используемое устройство: {device}")
 # Обеспечим повторяемость запусков - заблокируем состояние генератора случайных чисел
 # Установка seeds для CPU и GPU
 
-# При batch_size = 128 и learning_rate = 1e-03 получил:
+# При batch_size = 128 и learning_rate = 1e-03 получено для разных seed:
 # seedX = 0  # 10 epochs get 98.25 % on test
 # seedX = 1  # 10 epochs get 99.09 % on test
 # seedX = 2  # 10 epochs get 99.01 % on test
@@ -47,9 +47,9 @@ print(f"Используемое устройство: {device}")
 # seedX = 0  # 9 epochs get 99.18 % on test  # нужно смотреть по кросс-валидации - и вовремя делать останова!
 
 # При batch_size = 64 и learning_rate = 1e-03 получил:
-# seedX = 0  # 10 epochs get  99.13 % on test
-# seedX = 1  # 10 epochs get  99.19 % on test
-# seedX = 10  # 10 epochs get  99.06 % on test - это отличается от полученного ранее 99.37 %, т.к. здесь я "отщипнул" от датасета 10000 на валидацию
+# seedX = 0  # 10 epochs get 99.13 % on test
+# seedX = 1  # 10 epochs get 99.19 % on test
+# seedX = 10  # 10 epochs get 99.06 % on test - это отличается от полученного ранее 99.37 %, т.к. здесь я "отщипнул" от датасета 10000 на валидацию
 
 seedX = 0
 torch.manual_seed(seedX)
@@ -59,11 +59,88 @@ if torch.cuda.is_available():
     torch.backends.cudnn.benchmark = False
 
 # Hyperparameters for training
-num_epochs = 9
+num_epochs = 40
 num_classes = 10
-batch_size = 128
-#batch_size = 64
-learning_rate = 1e-04
+
+# Заведем в таблицу значений batch и lr те, что составляют best practice:
+#batch_size = 32  # a - нет смысла учить подольше, нужно сразу прорабатывать piecewise lr через onnx-файлы
+batch_size = 64  # b
+#batch_size = 128  # c - есть смысл учить подольше
+
+#learning_rate = 1e-03  # 1
+#learning_rate = 2e-03  # 2
+#learning_rate = 2.5e-03  # 3
+#learning_rate = 5e-03  # 4
+#learning_rate = 7.5e-03  # 5
+
+#learning_rate = 1e-04  # 6
+#learning_rate = 2e-04  # 7
+#learning_rate = 2.5e-04  # 8
+#learning_rate = 5e-04  # 9
+#learning_rate = 7.5e-04  # 10
+
+#learning_rate = 1e-05  # 11
+#learning_rate = 2e-05  # 12
+#learning_rate = 2.5e-05  # 13
+#learning_rate = 5e-05  # 14
+learning_rate = 7.5e-05  # 15
+
+'''
+Проведем grid search для соотношений batch-lr на протяжении 10 эпох. 
+Выберем и сохраним в onnx для последующего piecewise lr эксперимента 
+наилучшие модели с ранней останова по критерию точности cross-val или test >=99.20% 
+на протяжении 10 эпох (для батча размером 32) и 40 эпох (для больших батчей).
+
+Cross-val results and test results for seed=0:
+ a1 на 10 эпох: best_epoch_8=99.08% test_epoch_10=99.30%  # a1 на 8 эпох save
+a2 на 10 эпох: best_epoch_8=98.97% test_epoch_10=99.08%
+ a3 на 10 эпох: best_epoch_10=98.99% test_epoch_10=99.25%  # a3 на 10 эпох save
+a4 на 10 эпох: best_epoch_10=99.05% test_epoch_10=99.07%
+a5 на 10 эпох: best_epoch_4=98.55% test_epoch_10=98.40%
+ a6 на 10 эпох: best_epoch_10=99.31% test_epoch_10=99.33%  # a6 на 10 эпох save
+a7 на 10 эпох: best_epoch_7=99.19% test_epoch_10=98.93%
+ a8 на 10 эпох: best_epoch_9=99.23% test_epoch_10=98.76%  # a8 на 9 эпох save
+a9 на 10 эпох: best_epoch_6=99.17% test_epoch_10=99.16%
+ a10 на 10 эпох: best_epoch_8=99.34% test_epoch_10=99.23%  # a10 на 8 эпох save
+ a11 на 10 эпох: best_epoch_8=99.19% test_epoch_10=99.29%  # a11 на 8 эпох save
+ a12 на 10 эпох: best_epoch_10=99.28% test_epoch_10=99.27%  # a12 на 10 эпох save
+ a13 на 10 эпох: best_epoch_7=99.25% test_epoch_10=99.22%  # a13 на 7 эпох save
+ a14 на 10 эпох: best_epoch_7=99.34% test_epoch_10=98.69%  # a14 на 7 эпох save
+ a15 на 10 эпох: best_epoch_6=99.25% test_epoch_10=99.15%  # a15 на 6 эпох save
+
+b1 на 10 эпох: best_epoch_8=99.05% test_epoch_10=99.13%
+b2 на 10 эпох: best_epoch_8=98.97% test_epoch_10=99.08%
+b3 на 10 эпох: best_epoch_8=99.12% test_epoch_10=98.78%
+b4 на 10 эпох: best_epoch_9=99.01% test_epoch_10=98.70%
+b5 на 10 эпох: best_epoch_8=98.88% test_epoch_10=98.61%
+b6 на 10 эпох: best_epoch_9=99.13% test_epoch_10=99.05%
+b7 на 10 эпох: best_epoch_6=99.18% test_epoch_10=98.31%
+ b8 на 10 эпох: best_epoch_10=99.23% test_epoch_10=99.13%  # b8 на 40 эпох: best_epoch_
+b9 на 10 эпох: best_epoch_9=99.05% test_epoch_10=98.89%
+b10 на 10 эпох: best_epoch_7=99.09% test_epoch_10=98.86%
+ b11 на 10 эпох: best_epoch_9=99.25% test_epoch_10=99.30%  # b11 на 40 эпох: best_epoch_32=99.46%
+ b12 на 10 эпох: best_epoch_8=99.26% test_epoch_10=99.01%  # b12 на 40 эпох: best_epoch_35=99.49%
+ b13 на 10 эпох: best_epoch_9=99.34% test_epoch_10=99.21%  # b13 на 40 эпох: best_epoch_37=99.41%
+b14 на 10 эпох: best_epoch_10=99.12% test_epoch_10=99.07%
+ b15 на 10 эпох: best_epoch_6=99.23% test_epoch_10=99.20%  # b15 на 40 эпох: best_epoch_30=99.47%
+
+c1 на 10 эпох: best_epoch_5=99.10% test_epoch_10=98.25%
+c2 на 10 эпох: best_epoch_8=98.84% test_epoch_10=98.78%
+c3 на 10 эпох: best_epoch_9=98.96% test_epoch_10=98.91%
+c4 на 10 эпох: best_epoch_7=98.68% test_epoch_10=98.57%
+c5 на 10 эпох: best_epoch_9=98.73% test_epoch_10=98.32%
+ c6 на 10 эпох: best_epoch_9=99.24% test_epoch_10=98.98%  # c6 на 40 эпох:
+ c7 на 10 эпох: best_epoch_5=99.22% test_epoch_10=99.16%  # c7 на 40 эпох:
+ c8 на 10 эпох: best_epoch_7=99.20% test_epoch_10=99.19%  # c8 на 40 эпох:
+ c9 на 10 эпох: best_epoch_6=99.20% test_epoch_10=98.87%  # c9 на 40 эпох:
+c10 на 10 эпох: best_epoch_7=99.04% test_epoch_10=98.37%
+ c11 на 10 эпох: best_epoch_7=99.19% test_epoch_10=99.20%  # c11 на 40 эпох: best_epoch_30=99.42%
+ c12 на 10 эпох: best_epoch_7=99.25% test_epoch_10=99.19%  # c12 на 40 эпох: best_epoch_31=99.48%
+ c13 на 10 эпох: best_epoch_4=99.23% test_epoch_10=99.26%  # c13 на 40 эпох: best_epoch_39=99.51% save
+ c14 на 10 эпох: best_epoch_10=99.30% test_epoch_10=99.23%  # c14 на 40 эпох: best_epoch_29=99.51% save
+ c15 на 10 эпох: best_epoch_10=99.28% test_epoch_10=99.23%  # c15 на 40 эпох: best_epoch_27=99.47%
+'''
+# Есть смысл опробовать 40 эпох для батча размером 128 при условии, что 10 эпох - вполне достаточно для батча размером 32
 
 # Формирование массивов данных MNIST
 # Specific for MNIST integrated into PyTorch
@@ -194,13 +271,13 @@ for epoch in range(num_epochs):
         val_acc = correct / total
         val_acc_list.append(val_acc)
         print(f"########################### Train Epoch [{epoch+1}/{num_epochs}], Cross-Validation Accuracy: {(val_acc*100):.2f} %")
-        if (val_acc*100) > 99.55:
+        if (val_acc*100) > 99.49:
             # Save trained model into onnx
             torch_input = torch.randn(1, 1, 28, 28, device=device)
             torch.onnx.export(
                 model,  # PyTorch model
                 (torch_input,),  # Input data
-                f'output_onnx/mnist-custom_good_{epoch+1}.onnx',  # Output ONNX file
+                f'output_onnx/mnist_seed{seedX}_batch_size{batch_size}_learning_rate{learning_rate}_epoch{epoch+1}.onnx',  # Output ONNX file
                 input_names=['input'],  # Names for the input
                 output_names=['output'],  # Names for the output
                 dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}},
@@ -224,7 +301,7 @@ with torch.no_grad():
         correct += (predicted == labels).sum().item()
 
     print(f"Test Accuracy of the model on the 10000 test images: {((correct / total) * 100):.4f} %")
-
+'''
 # Save trained model into onnx
 torch_input = torch.randn(1, 1, 28, 28, device=device)
 torch.onnx.export(
@@ -236,7 +313,7 @@ torch.onnx.export(
     dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}},
     verbose=False  # Optional: Verbose logging
 )
-
+'''
 # Save trained model into .pt
 #torch.save(model.state_dict(),'output_pt/mnist-custom_piecewise_1.pt')
 
