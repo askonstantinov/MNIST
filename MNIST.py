@@ -59,13 +59,13 @@ if torch.cuda.is_available():
     torch.backends.cudnn.benchmark = False
 
 # Hyperparameters for training
-num_epochs = 40
+num_epochs = 29
 num_classes = 10
 
 # Заведем в таблицу значений batch и lr те, что составляют best practice:
 #batch_size = 32  # a - нет смысла учить подольше, нужно сразу прорабатывать piecewise lr через onnx-файлы
-batch_size = 64  # b
-#batch_size = 128  # c - есть смысл учить подольше
+#batch_size = 64  # b
+batch_size = 128  # c - есть смысл учить подольше
 
 #learning_rate = 1e-03  # 1
 #learning_rate = 2e-03  # 2
@@ -82,8 +82,8 @@ batch_size = 64  # b
 #learning_rate = 1e-05  # 11
 #learning_rate = 2e-05  # 12
 #learning_rate = 2.5e-05  # 13
-#learning_rate = 5e-05  # 14
-learning_rate = 7.5e-05  # 15
+learning_rate = 5e-05  # 14
+#learning_rate = 7.5e-05  # 15
 
 '''
 Проведем grid search для соотношений batch-lr на протяжении 10 эпох. 
@@ -115,7 +115,7 @@ b4 на 10 эпох: best_epoch_9=99.01% test_epoch_10=98.70%
 b5 на 10 эпох: best_epoch_8=98.88% test_epoch_10=98.61%
 b6 на 10 эпох: best_epoch_9=99.13% test_epoch_10=99.05%
 b7 на 10 эпох: best_epoch_6=99.18% test_epoch_10=98.31%
- b8 на 10 эпох: best_epoch_10=99.23% test_epoch_10=99.13%  # b8 на 40 эпох: best_epoch_
+ b8 на 10 эпох: best_epoch_10=99.23% test_epoch_10=99.13%  # b8 на 40 эпох: best_epoch_35=99.44%
 b9 на 10 эпох: best_epoch_9=99.05% test_epoch_10=98.89%
 b10 на 10 эпох: best_epoch_7=99.09% test_epoch_10=98.86%
  b11 на 10 эпох: best_epoch_9=99.25% test_epoch_10=99.30%  # b11 на 40 эпох: best_epoch_32=99.46%
@@ -129,10 +129,10 @@ c2 на 10 эпох: best_epoch_8=98.84% test_epoch_10=98.78%
 c3 на 10 эпох: best_epoch_9=98.96% test_epoch_10=98.91%
 c4 на 10 эпох: best_epoch_7=98.68% test_epoch_10=98.57%
 c5 на 10 эпох: best_epoch_9=98.73% test_epoch_10=98.32%
- c6 на 10 эпох: best_epoch_9=99.24% test_epoch_10=98.98%  # c6 на 40 эпох:
- c7 на 10 эпох: best_epoch_5=99.22% test_epoch_10=99.16%  # c7 на 40 эпох:
- c8 на 10 эпох: best_epoch_7=99.20% test_epoch_10=99.19%  # c8 на 40 эпох:
- c9 на 10 эпох: best_epoch_6=99.20% test_epoch_10=98.87%  # c9 на 40 эпох:
+ c6 на 10 эпох: best_epoch_9=99.24% test_epoch_10=98.98%  # c6 на 40 эпох: best_epoch_32=99.48%
+ c7 на 10 эпох: best_epoch_5=99.22% test_epoch_10=99.16%  # c7 на 40 эпох: best_epoch_32=99.48%
+ c8 на 10 эпох: best_epoch_7=99.20% test_epoch_10=99.19%  # c8 на 40 эпох: best_epoch_35=99.44%
+ c9 на 10 эпох: best_epoch_6=99.20% test_epoch_10=98.87%  # c9 на 40 эпох: best_epoch_28=99.34%
 c10 на 10 эпох: best_epoch_7=99.04% test_epoch_10=98.37%
  c11 на 10 эпох: best_epoch_7=99.19% test_epoch_10=99.20%  # c11 на 40 эпох: best_epoch_30=99.42%
  c12 на 10 эпох: best_epoch_7=99.25% test_epoch_10=99.19%  # c12 на 40 эпох: best_epoch_31=99.48%
@@ -301,19 +301,19 @@ with torch.no_grad():
         correct += (predicted == labels).sum().item()
 
     print(f"Test Accuracy of the model on the 10000 test images: {((correct / total) * 100):.4f} %")
-'''
+
 # Save trained model into onnx
 torch_input = torch.randn(1, 1, 28, 28, device=device)
 torch.onnx.export(
     model,  # PyTorch model
     (torch_input,),  # Input data
-    'output_onnx/mnist-custom_piecewise_1.onnx',  # Output ONNX file
+    f'output_onnx/mnist_seed{seedX}_batch_size{batch_size}_learning_rate{learning_rate}_epoch{epoch+1}.onnx',  # 'output_onnx/mnist-custom_piecewise_1.onnx',  # Output ONNX file
     input_names=['input'],  # Names for the input
     output_names=['output'],  # Names for the output
     dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}},
     verbose=False  # Optional: Verbose logging
 )
-'''
+
 # Save trained model into .pt
 #torch.save(model.state_dict(),'output_pt/mnist-custom_piecewise_1.pt')
 
