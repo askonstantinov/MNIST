@@ -4,26 +4,49 @@ import torchvision.transforms as transforms
 import torchvision.datasets
 from bokeh.plotting import figure
 from bokeh.io import show
-from bokeh.models import LinearAxis, Range1d
+from bokeh.models import LinearAxis, Range1d, Span, Label
 import numpy as np
 import torch
 import optuna
 import math
 from torch.utils.data import random_split
+import random
 
+
+# Перед первым запуском - проверить корректность активированной виртуальной среды.
+# При необходимости - создать виртуальную среду (conda), установить все необходимое командой
+# pip install -r requirements.txt
+# После подготовки виртуальной среды - активировать ее.
+
+# Просмотреть сохраненные обученные модели (pt или onnx) можно тут
+# https://netron.app/
+
+# Обеспечение повторяемости результатов (фиксация seed)
+# Для наилучшего результата следует экспериментировать с разными значениями seed (эвристика)
+allseed = 10
+random.seed(allseed)
+np.random.seed(allseed)
+torch.manual_seed(allseed)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(allseed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 # Проверка доступности GPU
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-#device = torch.device("cpu")
-print(f"Используемое устройство: {device}")
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#device = torch.device('cpu')
+print(f'Используемое устройство: {device}')
 
+'''
+################################################################################################
+# НИЖЕ ИЗЛОЖЕНА МОЯ КРАТКАЯ ИНСТРУКЦИЯ ПО ИСПОЛЬЗОВАНИЮ OPTUNA С ПОЯСНЕНИЯМИ (НА ОСНОВЕ PYTORCH)
 ################################################################################################
 
 # Суть Optuna в том, чтобы применить smart подход (вместо грубых эвристик) и автоматизировать процесс поиска
 # наилучшей комбинации гиперпараметров (ГП). Поэтому важно представлять полный набор ГП. Типы гиперпараметров:
 
 # 1) ГП модели: включают параметры, определяющие архитектуру модели, например, количество скрытых слоев и нейронов;
-    # для Optuna следует задавать модель явно
+    # для Optuna следует задавать модель явно (речь о 'скелете')
 
 # 2) ГП оптимизации: к ним относятся параметры, управляющие процессом оптимизации, например, скорость обучения;
     # для Optuna можно использовать подгруженную модель, например, из onnx
@@ -34,7 +57,7 @@ print(f"Используемое устройство: {device}")
         # поэтому целесообразно отнести к ГП оптимизации
     # Важное - dropout задается отдельным слоем, поэтому целесообразно отнести к ГП модели.
 
-################################################ 1) Перечень:
+################################################ 1) Перечень ГП модели:
 
 # Тип слоя, его положение, количество нейронов,
 # Количество слоев,
@@ -114,7 +137,7 @@ print(f"Используемое устройство: {device}")
 #
 # Список функций активации torch:
 # 'Threshold'
-# 'ReLU'  # Используется
+# 'ReLU'  # Опробован
 # 'RReLU'
 # 'Hardtanh'
 # 'ReLU6'
@@ -130,7 +153,7 @@ print(f"Используемое устройство: {device}")
 # 'GLU'
 # 'GELU'
 # 'Hardshrink'
-# 'LeakyReLU'
+# 'LeakyReLU'  # Используется
 # 'LogSigmoid'
 # 'Softplus'
 # 'Softshrink'
@@ -143,21 +166,21 @@ print(f"Используемое устройство: {device}")
 # 'Softmax2d'
 # 'LogSoftmax'
 
-################################################ 2) Перечень:
+################################################ 2) Перечень ГП оптимизации:
 
 # Выбор оптимизатора градиентного спуска. Для каждого разный набор ГП. Список оптимизаторов torch:
 # adadelta
 # adagrad
 # adam  # Используется
-# adamw
+# adamw  # Опробован
 # sparse_adam
 # adamax
 # asgd
 # sgd
 # radam
 # rprop
-# rmsprop
-# nadam
+# rmsprop  # Опробован
+# nadam  # Опробован
 # lbfgs
 
 # Для используемого оптимизатора adam список ГП:
@@ -183,7 +206,7 @@ print(f"Используемое устройство: {device}")
 # 'PoissonNLLLoss'
 # 'GaussianNLLLoss'
 # 'KLDivLoss'
-# 'MSELoss'  # Опробую
+# 'MSELoss'  # Опробован
 # 'BCELoss'
 # 'BCEWithLogitsLoss'
 # 'HingeEmbeddingLoss'
@@ -203,7 +226,7 @@ print(f"Используемое устройство: {device}")
 # Список вариантов батч-нормализации:
 # 'BatchNorm1d'
 # 'LazyBatchNorm1d'
-# 'BatchNorm2d'
+# 'BatchNorm2d'  # Используется
 # 'LazyBatchNorm2d'
 # 'BatchNorm3d'
 # 'LazyBatchNorm3d'
@@ -251,24 +274,28 @@ print(f"Используемое устройство: {device}")
 # дадут результаты, подлежащие отсеиванию. Поэтому не рекомендуется делать всё на одном вычислителе.
 
 ################################################################################################
+'''
+
+# Ниже представлено применение Optuna для автоматического подбора ГП модели и обучение нейросети с лучшими ГП модели
+
 
 # Целевая функция Optuna
-def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_optuna):
-    # Fixed hyperparameters needed for training
+def objective(trial, number_epochs_optuna, criterion_optuna):
+    #print('########## Optuna Trial =', trial.number + 1)
+    
+    # Фиксация необходимых ГП оптимизации (2), включая общие ГП
     num_epochs_optuna = number_epochs_optuna
     learning_rate_optuna = 1e-3
     batch_size_optuna = 32
 
-    # Формирование массивов данных MNIST
-    # Specific for MNIST integrated into PyTorch
+    # Формирование массивов данных MNIST из базы данных PyTorch
     DATA_PATH = 'mnist-data-path'
     MODEL_STORE_PATH = 'model-store-path'
-    # Transforms to apply to the data
     trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
-    # MNIST 70000 images dataset (60000 images for train, and 10000 images for test)
+    # Выделение 60000 образцов для обучения и валидации, а 10000 - для теста (датасет MNIST содержит 70000 образцов)
     train_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=True, transform=trans, download=True)
     test_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=False, transform=trans)
-    # Разделение на обучающий, валидационный и тестовый наборы (в соотношении приблизительно 70%-15%-15%)
+    # Разделение на обучающий и валидационный датасеты (в соотношении обучение-валидация-тест примерно как 70%-15%-15%)
     train_size = 50000
     val_size = 10000
     train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
@@ -277,53 +304,81 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
     val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size_optuna, shuffle=False)
     test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size_optuna, shuffle=False)
 
-    # Range of hyperparameters to choose from Optuna (1)
-    layer1_conv2d_filter = trial.suggest_int('layer1_conv2d_filter', 32, 128)
-    layer1_conv2d_kernel = trial.suggest_int('layer1_conv2d_kernel', 3, 7, step=2)
-    layer1_leakyrelu = trial.suggest_float('layer1_leakyrelu', 1e-03, 1e-01, log=True)
+    # ВАЖНОЕ - можно реализовать подбор количества слоев и их расположения, но для этого нужны вычислительные мощности
+    # Код с подобным примером представлен в другом скрипте - MNIST-optuna-adv.py
 
-    layer2_conv2d_filter = trial.suggest_int('layer2_conv2d_filter', 32, 128)
-    layer2_conv2d_kernel = trial.suggest_int('layer2_conv2d_kernel', 3, 7, step=2)
-    layer2_leakyrelu = trial.suggest_float('layer2_leakyrelu', 1e-03, 1e-01, log=True)
+    # Определение конкретных ГП модели (1) с диапазонами для подбора в ходе отработки Optuna
+    layer1_conv2d_filter = trial.suggest_int('layer1_conv2d_filter', 128, 256, step=32)
+    layer1_conv2d_kernel = trial.suggest_int('layer1_conv2d_kernel', 5, 7, step=2)
+    layer1_leakyrelu = trial.suggest_float('layer1_leakyrelu', 1e-03, 2e-01, log=True)
 
-    layer3_fc1_neurons = layer2_conv2d_filter * int(train_loader.dataset.dataset.data.size(1) / (2*2)) * int(train_loader.dataset.dataset.data.size(1) / (2*2))
+    layer2_conv2d_filter = trial.suggest_int('layer2_conv2d_filter', 128, 256, step=32)
+    layer2_conv2d_kernel = trial.suggest_int('layer2_conv2d_kernel', 5, 7, step=2)
+    layer2_leakyrelu = trial.suggest_float('layer2_leakyrelu', 1e-03, 2e-01, log=True)
 
-    layer4_fc2_neurons = trial.suggest_int('layer4_fc2_neurons', 100, 10000)
+    layer3_conv2d_filter = trial.suggest_int('layer3_conv2d_filter', 128, 256, step=32)
+    layer3_conv2d_kernel = trial.suggest_int('layer3_conv2d_kernel', 5, 7, step=2)
+    layer3_leakyrelu = trial.suggest_float('layer3_leakyrelu', 1e-03, 2e-01, log=True)
 
-    # Задаем модель нейросети для Optuna в явном виде
-    class ConvNet(nn.Module):
+    layer4_conv2d_filter = trial.suggest_int('layer4_conv2d_filter', 128, 256, step=32)
+    layer4_conv2d_kernel = trial.suggest_int('layer4_conv2d_kernel', 5, 7, step=2)
+    layer4_leakyrelu = trial.suggest_float('layer4_leakyrelu', 1e-03, 2e-01, log=True)
+
+    # Размерность входа полносвязного слоя, стоящего после сверточных, будет зависеть от параметров maxpooling
+    layer5_fc1_neurons = layer4_conv2d_filter * int(
+        train_loader.dataset.dataset.data.size(1) / (2*2)) * int(train_loader.dataset.dataset.data.size(1) / (2*2))
+    layer6_fc2_neurons = trial.suggest_int('layer6_fc2_neurons', 512, 1024, step=128)
+
+    # Формирование 'скелета' нейросети для Optuna в явном виде
+    class PreOptunaNet(nn.Module):
         def __init__(self):
-            super(ConvNet, self).__init__()
+            super(PreOptunaNet, self).__init__()
             self.layer1 = nn.Sequential(
-                nn.Conv2d(1, layer1_conv2d_filter, kernel_size=layer1_conv2d_kernel, stride=1, padding=int(layer1_conv2d_kernel / 2)),
-                nn.BatchNorm2d(layer1_conv2d_filter),
+                nn.Conv2d(1, layer1_conv2d_filter, kernel_size=layer1_conv2d_kernel, stride=1,
+                          padding=int(layer1_conv2d_kernel / 2)),
                 nn.LeakyReLU(negative_slope=layer1_leakyrelu),
-                nn.MaxPool2d(kernel_size=2, stride=2))
+                nn.BatchNorm2d(layer1_conv2d_filter))
             self.layer2 = nn.Sequential(
-                nn.Conv2d(layer1_conv2d_filter, layer2_conv2d_filter, kernel_size=layer2_conv2d_kernel, stride=1, padding=int(layer2_conv2d_kernel / 2)),
-                nn.BatchNorm2d(layer2_conv2d_filter),
+                nn.Conv2d(layer1_conv2d_filter, layer2_conv2d_filter, kernel_size=layer2_conv2d_kernel, stride=1,
+                          padding=int(layer2_conv2d_kernel / 2)),
                 nn.LeakyReLU(negative_slope=layer2_leakyrelu),
-                nn.MaxPool2d(kernel_size=2, stride=2))
-            self.fc1 = nn.Linear(layer3_fc1_neurons, layer4_fc2_neurons)
+                nn.MaxPool2d(kernel_size=2, stride=2),
+                nn.BatchNorm2d(layer2_conv2d_filter))
+            self.layer3 = nn.Sequential(
+                nn.Conv2d(layer2_conv2d_filter, layer3_conv2d_filter, kernel_size=layer3_conv2d_kernel, stride=1,
+                          padding=int(layer3_conv2d_kernel / 2)),
+                nn.LeakyReLU(negative_slope=layer3_leakyrelu),
+                nn.BatchNorm2d(layer3_conv2d_filter))
+            self.layer4 = nn.Sequential(
+                nn.Conv2d(layer3_conv2d_filter, layer4_conv2d_filter, kernel_size=layer4_conv2d_kernel, stride=1,
+                          padding=int(layer4_conv2d_kernel / 2)),
+                nn.LeakyReLU(negative_slope=layer4_leakyrelu),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+                nn.BatchNorm2d(layer4_conv2d_filter))
+            self.fc1 = nn.Linear(layer5_fc1_neurons, layer6_fc2_neurons)
+            self.fc1act = nn.LeakyReLU()
             self.drop_out = nn.Dropout(p=0.5)
-            self.fc2 = nn.Linear(layer4_fc2_neurons, 10)
+            self.fc2 = nn.Linear(layer6_fc2_neurons, 10)
 
         def forward(self, x):
             out = self.layer1(x)
             out = self.layer2(out)
+            out = self.layer3(out)
+            out = self.layer4(out)
             out = out.reshape(out.size(0), -1)
             out = self.fc1(out)
+            out = self.fc1act(out)
             out = self.drop_out(out)
             out = self.fc2(out)
-            #out = torch.softmax(out, dim=1)  # Вычисление вероятностей с помощью Softmax
+            #out = torch.softmax(out, dim=1)  # Вычисление вероятностей с помощью Softmax - для loss MSE
             return out
 
-    model = ConvNet()
-    print(model)
+    model = PreOptunaNet()
+    print('Optuna model =', model)  # Визуальная проверка
 
-    model.to(device)  # Перенос модели на устройство GPU
+    model.to(device)  # Перенос модели на вычислитель (при наличии - на GPU, иначе - на CPU)
 
-    # Определение оптимизатора
+    # Оптимизатор Adam
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate_optuna)
 
     # Loss
@@ -335,15 +390,17 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
     acc_list = []
     val_acc_list = []
     for epoch in range(num_epochs_optuna):
+        model.train()  # Режим обучения - влияет на слои Dropout и Batch Normalization
+
         for i, (images, labels) in enumerate(train_loader):
 
-            images = images.to(device)  # Перенос данных на устройство GPU
-            labels = labels.to(device)  # Перенос меток на устройство GPU
+            images = images.to(device)  # Перенос данных на вычислитель (при наличии - на GPU, иначе - на CPU)
+            labels = labels.to(device)  # Перенос меток на вычислитель (при наличии - на GPU, иначе - на CPU)
 
             # Запуск прямого прохода
             outputs = model(images)
             loss = criterion(outputs, labels)
-            #loss = criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
+            #loss = criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())  # для loss MSE
             loss_list.append(loss.item())
 
             # Обратное распространение и оптимизация
@@ -357,29 +414,33 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
             correct = (predicted == labels).sum().item()
             acc_list.append(correct / total)
 
+            '''
+            # Вывод промежуточных результатов в процессе обучения после батча
             if batch_size_optuna >= total_step and (i + 1) == total_step:
-                print('Optuna Train Epoch [{}/{}], Step [{}/{}], SUPER Batch = Total steps [{}], Loss: {:.4f}, Optuna Train Accuracy: {:.2f} %'
-                      .format(epoch + 1, num_epochs_optuna, i + 1, total_step,
-                              total_step, loss.item(), (correct / total) * 100))
+                print(f'Optuna Train Epoch [{epoch + 1}/{num_epochs_optuna}], Step [{i + 1}/{total_step}], '
+                      f'SUPER Batch = Total steps [{total_step}], '
+                      f'Loss: {loss.item():.6f}, Train Accuracy: {((correct / total) * 100):.2f} %')
             elif (i + 1) % batch_size_optuna == 0:
-               print('Optuna Train Epoch [{}/{}], Step [{}/{}], Batch [{}/{}], Loss: {:.4f}, Optuna Train Accuracy: {:.2f} %'
-                     .format(epoch + 1, num_epochs_optuna, i + 1, total_step, int((i + 1) / batch_size_optuna),
-                             math.ceil(total_step / batch_size_optuna), loss.item(), (correct / total) * 100))
+                print(f'Optuna Train Epoch [{epoch + 1}/{num_epochs_optuna}], Step [{i + 1}/{total_step}], '
+                      f'Batch [{int((i + 1) / batch_size_optuna)}/{math.ceil(total_step / batch_size_optuna)}], '
+                      f'Loss: {loss.item():.6f}, Train Accuracy: {((correct / total) * 100):.2f} %')
             elif (i + 1) == total_step:
-                print('Optuna Train Epoch [{}/{}], Step [{}/{}], RESIDUAL Batch [{}/{}], Loss: {:.4f}, Optuna Train Accuracy: {:.2f} %'
-                     .format(epoch + 1, num_epochs_optuna, i + 1, total_step, (int((i + 1) / batch_size_optuna)) + 1,
-                              math.ceil(total_step / batch_size_optuna), loss.item(), (correct / total) * 100))
+                print(f'Optuna Train Epoch [{epoch + 1}/{num_epochs_optuna}], Step [{i + 1}/{total_step}], '
+                      f'RESIDUAL Batch [{(int((i + 1) / batch_size_optuna)) + 1}/{math.ceil(total_step / batch_size_optuna)}], '
+                      f'Loss: {loss.item():.6f}, Train Accuracy: {((correct / total) * 100):.2f} %')
+            '''
 
-        # Кросс-валидация
-        model.eval()
+        # Кросс-валидация после прохождения одной эпохи
+        model.eval()  # Перевод в режим inference (влияет на слои Dropout и Batch Normalization)
         with torch.no_grad():
             correct = 0
             total = 0
             for images, labels in val_loader:
 
-                images = images.to(device)  # Перенос данных на устройство GPU
-                labels = labels.to(device)  # Перенос данных на устройство GPU
+                images = images.to(device)  # Перенос данных на вычислитель (при наличии - на GPU, иначе - на CPU)
+                labels = labels.to(device)  # Перенос меток на вычислитель (при наличии - на GPU, иначе - на CPU)
 
+                # Вывод точности на валидационной выборке
                 outputs = model(images)
                 _, predicted = torch.max(outputs.data, 1)
                 total += labels.size(0)
@@ -387,140 +448,171 @@ def objective(trial, path_to_onnx_model_optuna, number_epochs_optuna, criterion_
 
             val_acc = correct / total
             val_acc_list.append(val_acc)
-            print(f"########################### Optuna Cross-Validation Accuracy: {(val_acc*100):.2f} %")
+            print(f'Optuna Trial: [{trial.number + 1}]')
+            print(f'Processed Epoch: [{epoch + 1}/{num_epochs_optuna}]')
+            print(f'Cross-Validation Accuracy: [{(val_acc * 100):.2f} %]')
 
         trial.report(val_acc, epoch)
         if trial.should_prune():
-            raise optuna.exceptions.TrialPruned()
+            raise optuna.exceptions.TrialPruned()  # ВАЖНОЕ - прун выполняется на основе оценки валидационной точности
 
     # Тестирование модели
-    model.eval()
+    model.eval()  # Перевод в режим inference (влияет на слои Dropout и Batch Normalization)
     with torch.no_grad():
         correct = 0
         total = 0
         for images, labels in test_loader:
 
-            images = images.to(device)  # Перенос данных на устройство GPU
-            labels = labels.to(device)  # Перенос меток на устройство GPU
+            images = images.to(device)  # Перенос данных на вычислитель (при наличии - на GPU, иначе - на CPU)
+            labels = labels.to(device)  # Перенос меток на вычислитель (при наличии - на GPU, иначе - на CPU)
 
+            # Вывод точности на тестовой выборке после всего обучения данного OPTUNA TRIAL
             outputs = model(images)
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
     test_accuracy = (correct / total) * 100
+    print(f'Optuna Test Accuracy on the 10000 test images: {test_accuracy:.2f} %')
 
     # Возврат точности как метрики для Optuna
     return test_accuracy
 
 # Ввод значений параметров и запуск Optuna
-onnxpath = 'output_onnx/mnist-custom_1.onnx'
-number_epochs_optuna = 14
+number_epochs_optuna = 10
 # Loss
-criterion = nn.CrossEntropyLoss()
-#criterion = nn.MSELoss()  # для работы MSE нужно добавить слой softmax в конец (в forward) и добавить в цикл one_hot
+criterion = nn.CrossEntropyLoss()  # Loss для отработки Optuna и для финального полного обучения с лучшими ГП модели (1)
+#criterion = nn.MSELoss()  # для работы MSE надо добавить слой softmax в конец (в forward) и добавить one_hot
 
-study = optuna.create_study(sampler=optuna.samplers.TPESampler(n_startup_trials=30),
+study = optuna.create_study(sampler=optuna.samplers.TPESampler(n_startup_trials=50),
                             pruner=optuna.pruners.HyperbandPruner(),
                             direction='maximize')
-study.optimize(lambda trial: objective(trial, onnxpath, number_epochs_optuna, criterion),
-               n_trials=101)  # желательно задавать >100 trials
+study.optimize(lambda trial: objective(trial, number_epochs_optuna, criterion),
+               n_trials=1001)  # надо задавать >100 trials в силу статистической природы подходов, реализуемых в Optuna
 
 # Вывод результатов
-print(f"Лучшая точность: {study.best_value}")
-print(f"Лучшие параметры: {study.best_params}")
-print(f"Количество обрезанных (pruned) trials: {len(study.get_trials(deepcopy=False, states=[optuna.trial.TrialState.PRUNED]))}")
+print(f'Лучшая точность: {study.best_value}')
+print(f'Лучшие параметры: {study.best_params}')
+print(f'Количество pruned trials: {len(study.get_trials(deepcopy=False, states=[optuna.trial.TrialState.PRUNED]))}')
 
 ################################################################################################
-# Обучение модели с лучшими параметрами
-# Ввод прочих параметров
-number_epochs_final = 14
+# Ниже представлено полное (без прунов) (валидационный датасет включен в обучающий датасет)
+# обучение с наилучшими (определенными выше) параметрами
+print('#################### ФИНАЛЬНОЕ ОБУЧЕНИЕ без прунов (валидационный датасет включен в обучающий датасет)')
+# Фиксация необходимых ГП оптимизации (2), включая общие ГП
+number_epochs_final = 20
 learning_rate_final = 1e-3
 batch_size_final = 32
 
-# Полноценное обучение с наилучшей комбинацией ГП от Optuna
-
-# Формирование массивов данных MNIST
-# Specific for MNIST integrated into PyTorch
+# Определение путей для данных MNIST
 DATA_PATH = 'mnist-data-path'
 MODEL_STORE_PATH = 'model-store-path'
-# Transforms to apply to the data
-trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
-# MNIST 70000 images dataset (60000 images for train, and 10000 images for test)
-train_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=True, transform=trans, download=True)
-test_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=False, transform=trans)
-# Разделение на обучающий, валидационный и тестовый наборы (в соотношении приблизительно 70%-15%-15%)
-train_size = 50000
-val_size = 10000
-train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
 
+# Параметры подготовки данных MNIST
+trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
+
+# MNIST dataset
+train_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=True, transform=trans, download=False)
+test_dataset = torchvision.datasets.MNIST(root=DATA_PATH, train=False, transform=trans)
+
+# Data loader
 train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size_final, shuffle=True)
-val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size_final, shuffle=False)
 test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size_final, shuffle=False)
 
 # Ввод определенных Optuna лучших параметров
 best_params = study.best_params
+
 layer1_conv2d_filter = best_params['layer1_conv2d_filter']
 layer1_conv2d_kernel = best_params['layer1_conv2d_kernel']
 layer1_leakyrelu = best_params['layer1_leakyrelu']
+
 layer2_conv2d_filter = best_params['layer2_conv2d_filter']
 layer2_conv2d_kernel = best_params['layer2_conv2d_kernel']
 layer2_leakyrelu = best_params['layer2_leakyrelu']
-layer3_fc1_neurons = layer2_conv2d_filter * int(train_loader.dataset.dataset.data.size(1) / (2*2)) * int(train_loader.dataset.dataset.data.size(1) / (2*2))
-layer4_fc2_neurons = best_params['layer4_fc2_neurons']
+
+layer3_conv2d_filter = best_params['layer3_conv2d_filter']
+layer3_conv2d_kernel = best_params['layer3_conv2d_kernel']
+layer3_leakyrelu = best_params['layer3_leakyrelu']
+
+layer4_conv2d_filter = best_params['layer4_conv2d_filter']
+layer4_conv2d_kernel = best_params['layer4_conv2d_kernel']
+layer4_leakyrelu = best_params['layer4_leakyrelu']
+
+layer5_fc1_neurons = layer4_conv2d_filter * int(
+    train_loader.dataset.data.size(1) / (2*2)) * int(train_loader.dataset.data.size(1) / (2*2))
+
+layer6_fc2_neurons = best_params['layer6_fc2_neurons']
+
 
 # Задаем модель нейросети в явном виде для финального обучения
-class ConvNet(nn.Module):
+class PreOptunaNet(nn.Module):
     def __init__(self):
-        super(ConvNet, self).__init__()
+        super(PreOptunaNet, self).__init__()
         self.layer1 = nn.Sequential(
-            nn.Conv2d(1, layer1_conv2d_filter, kernel_size=layer1_conv2d_kernel, stride=1, padding=int(layer1_conv2d_kernel / 2)),
-            nn.BatchNorm2d(layer1_conv2d_filter),
+            nn.Conv2d(1, layer1_conv2d_filter, kernel_size=layer1_conv2d_kernel, stride=1,
+                      padding=int(layer1_conv2d_kernel / 2)),
             nn.LeakyReLU(negative_slope=layer1_leakyrelu),
-            nn.MaxPool2d(kernel_size=2, stride=2))
+            nn.BatchNorm2d(layer1_conv2d_filter))
         self.layer2 = nn.Sequential(
-            nn.Conv2d(layer1_conv2d_filter, layer2_conv2d_filter, kernel_size=layer2_conv2d_kernel, stride=1, padding=int(layer2_conv2d_kernel / 2)),
-            nn.BatchNorm2d(layer2_conv2d_filter),
+            nn.Conv2d(layer1_conv2d_filter, layer2_conv2d_filter, kernel_size=layer2_conv2d_kernel, stride=1,
+                      padding=int(layer2_conv2d_kernel / 2)),
             nn.LeakyReLU(negative_slope=layer2_leakyrelu),
-            nn.MaxPool2d(kernel_size=2, stride=2))
-        self.fc1 = nn.Linear(layer3_fc1_neurons, layer4_fc2_neurons)
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.BatchNorm2d(layer2_conv2d_filter))
+        self.layer3 = nn.Sequential(
+            nn.Conv2d(layer2_conv2d_filter, layer3_conv2d_filter, kernel_size=layer3_conv2d_kernel, stride=1,
+                      padding=int(layer3_conv2d_kernel / 2)),
+            nn.LeakyReLU(negative_slope=layer3_leakyrelu),
+            nn.BatchNorm2d(layer3_conv2d_filter))
+        self.layer4 = nn.Sequential(
+            nn.Conv2d(layer3_conv2d_filter, layer4_conv2d_filter, kernel_size=layer4_conv2d_kernel, stride=1,
+                      padding=int(layer4_conv2d_kernel / 2)),
+            nn.LeakyReLU(negative_slope=layer4_leakyrelu),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.BatchNorm2d(layer4_conv2d_filter))
+        self.fc1 = nn.Linear(layer5_fc1_neurons, layer6_fc2_neurons)
+        self.fc1act = nn.LeakyReLU()
         self.drop_out = nn.Dropout(p=0.5)
-        self.fc2 = nn.Linear(layer4_fc2_neurons, 10)
+        self.fc2 = nn.Linear(layer6_fc2_neurons, 10)
 
-    def forward(self, x):
-        out = self.layer1(x)
-        out = self.layer2(out)
-        out = out.reshape(out.size(0), -1)
-        out = self.fc1(out)
-        out = self.drop_out(out)
-        out = self.fc2(out)
-        #out = torch.softmax(out, dim=1)  # Вычисление вероятностей с помощью Softmax
-        return out
+    def forward(self, xx):
+        outout = self.layer1(xx)
+        outout = self.layer2(outout)
+        outout = self.layer3(outout)
+        outout = self.layer4(outout)
+        outout = outout.reshape(outout.size(0), -1)
+        outout = self.fc1(outout)
+        outout = self.fc1act(outout)
+        outout = self.drop_out(outout)
+        outout = self.fc2(outout)
+        # outout = torch.softmax(outout, dim=1)  # Вычисление вероятностей с помощью Softmax - для loss MSE
+        return outout
 
 
-model = ConvNet()
-print(model)
+model = PreOptunaNet()
+print('model =', model)  # Визуальная проверка
 
-model = model.to(device)  # Перенос модели на устройство GPU
+model = model.to(device)  # Перенос модели на вычислитель (при наличии - на GPU, иначе - на CPU)
 
-# Определение оптимизатора
+# Оптимизатор Adam
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate_final)
 
-# Обучение модели
+# Обучение
 total_step = len(train_loader)
 loss_list = []
 acc_list = []
-val_acc_list = []
 for epoch in range(number_epochs_final):
-    for i, (images, labels) in enumerate(train_loader):
+    model.train()  # Режим обучения - влияет на слои Dropout и Batch Normalization
 
-        images = images.to(device)  # Перенос данных на устройство
-        labels = labels.to(device)  # Перенос меток на устройство
+    for ii, (images, labels) in enumerate(train_loader):
+
+        images = images.to(device)  # Перенос данных на вычислитель (при наличии - на GPU, иначе - на CPU)
+        labels = labels.to(device)  # Перенос меток на вычислитель (при наличии - на GPU, иначе - на CPU)
 
         # Run the forward pass
         outputs = model(images)
         loss = criterion(outputs, labels)
-        #loss = criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
+        #loss = criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())  # для loss MSE
         loss_list.append(loss.item())
 
         # Backprop and perform Adam optimization
@@ -534,40 +626,21 @@ for epoch in range(number_epochs_final):
         correct = (predicted == labels).sum().item()
         acc_list.append(correct / total)
 
-        if batch_size_final >= total_step and (i + 1) == total_step:
-            print(
-                'Train Epoch [{}/{}], Step [{}/{}], SUPER Batch = Total steps [{}], Loss: {:.4f}, Train Accuracy: {:.2f} %'
-                .format(epoch + 1, number_epochs_final, i + 1, total_step,
-                        total_step, loss.item(), (correct / total) * 100))
-        elif (i + 1) % batch_size_final == 0:
-            print('Train Epoch [{}/{}], Step [{}/{}], Batch [{}/{}], Loss: {:.4f}, Train Accuracy: {:.2f} %'
-                  .format(epoch + 1, number_epochs_final, i + 1, total_step, int((i + 1) / batch_size_final),
-                          math.ceil(total_step / batch_size_final), loss.item(), (correct / total) * 100))
-        elif (i + 1) == total_step:
-            print('Train Epoch [{}/{}], Step [{}/{}], RESIDUAL Batch [{}/{}], Loss: {:.4f}, Train Accuracy: {:.2f} %'
-                  .format(epoch + 1, number_epochs_final, i + 1, total_step, (int((i + 1) / batch_size_final)) + 1,
-                          math.ceil(total_step / batch_size_final), loss.item(), (correct / total) * 100))
+        # Вывод промежуточных результатов в процессе обучения после батча
+        if batch_size_final >= total_step and (ii + 1) == total_step:
+            print(f'Train Epoch [{epoch + 1}/{number_epochs_final}], Step [{ii + 1}/{total_step}], '
+                  f'SUPER Batch = Total steps [{total_step}], '
+                  f'Loss: {loss.item():.6f}, Train Accuracy: {((correct / total) * 100):.2f} %')
+        elif (ii + 1) % batch_size_final == 0:
+            print(f'Train Epoch [{epoch + 1}/{number_epochs_final}], Step [{ii + 1}/{total_step}], '
+                  f'Batch [{int((ii + 1) / batch_size_final)}/{math.ceil(total_step / batch_size_final)}], '
+                  f'Loss: {loss.item():.6f}, Train Accuracy: {((correct / total) * 100):.2f} %')
+        elif (ii + 1) == total_step:
+            print(f'Train Epoch [{epoch + 1}/{number_epochs_final}], Step [{ii + 1}/{total_step}], '
+                  f'RESIDUAL Batch [{(int((ii + 1) / batch_size_final)) + 1}/{math.ceil(total_step / batch_size_final)}], '
+                  f'Loss: {loss.item():.6f}, Train Accuracy: {((correct / total) * 100):.2f} %')
 
-    # Кросс-валидация
-    model.eval()
-    with torch.no_grad():
-        correct = 0
-        total = 0
-        for images, labels in val_loader:
-
-            images = images.to(device)  # Перенос данных на устройство GPU
-            labels = labels.to(device)  # Перенос данных на устройство GPU
-
-            outputs = model(images)
-            _, predicted = torch.max(outputs.data, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
-
-        val_acc = correct / total
-        val_acc_list.append(val_acc)
-        print(f"########################### Cross-Validation Accuracy: {(val_acc*100):.2f} %")
-
-# Test the model
+# Перевод в режим inference (влияет на слои Dropout и Batch Normalization)
 model.eval()
 
 with torch.no_grad():
@@ -575,32 +648,46 @@ with torch.no_grad():
     total = 0
     for images, labels in test_loader:
 
-        images = images.to(device)  # Перенос данных на устройство GPU
-        labels = labels.to(device)  # Перенос меток на устройство GPU
+        images = images.to(device)  # Перенос данных на вычислитель (при наличии - на GPU, иначе - на CPU)
+        labels = labels.to(device)  # Перенос меток на вычислитель (при наличии - на GPU, иначе - на CPU)
 
+        # Вывод точности на тестовой выборке после всего обучения
         outputs = model(images)
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
         correct += (predicted == labels).sum().item()
 
-    print('Test Accuracy of the model on the 10000 test images: {} %'.format((correct / total) * 100))
+    print(f'Final Test Accuracy on the 10000 test images: {(correct / total) * 100:.2f} %')
 
-# Save trained model into onnx
-torch_input = torch.randn(1, 1, 28, 28, device=device)
+# Сохранение обученной модели в формат onnx
+torch_input = torch.randn(1, 1, 28, 28, device=device)  # Генерируем случайные данные в нашей размерности
 torch.onnx.export(
-    model,  # PyTorch model
-    (torch_input,),  # Input data
-    'output_onnx/mnist-custom_1.onnx',  # Output ONNX file
-    input_names=['input'],  # Names for the input
-    output_names=['output'],  # Names for the output
-    dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}},
-    verbose=False  # Optional: Verbose logging
+    model,  # Собственно модель
+    (torch_input,),  # Инициализация графа вычислений случайными данными в нашей размерности
+    'output_onnx/PreOptunaNet.onnx',  # Расположение и наименование итогового файла onnx
+    input_names=['input'],
+    output_names=['output'],
+    dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}},  # Поддержка батчей различных размеров
+    verbose=False  # Логгирование
 )
 
-# Plot for training process
-p = figure(y_axis_label='Loss', width=850, y_range=(0, 1), title='PyTorch ConvNet results')
+# Сохранение обученной модели в формат .pt (это формат Python)
+torch.save(model.state_dict(),'output_pt/PreOptunaNet.pt')
+
+# Отрисовка процесса обучения с графиками потерь (loss_list) и точности (acc_list)
+p = figure(y_axis_label='Loss', width=1700, y_range=(0, 1), title='PyTorch PreOptunaNet results')
 p.extra_y_ranges = {'Accuracy': Range1d(start=0, end=100)}
 p.add_layout(LinearAxis(y_range_name='Accuracy', axis_label='Accuracy (%)'), 'right')
-p.line(np.arange(len(loss_list)), loss_list)
-p.line(np.arange(len(loss_list)), np.array(acc_list) * 100, y_range_name='Accuracy', color='red')
+p.line(np.arange(len(loss_list)), loss_list, legend_label='Train Loss', line_color='blue')
+p.line(np.arange(len(acc_list)), np.array(acc_list) * 100,
+       y_range_name='Accuracy', legend_label='Train Accuracy', line_color='red')
+
+# Вертикальные линии для разграничения эпох
+for j in range(1, (number_epochs_final + 1)):
+    z = j * total_step
+    p.add_layout(Span(location=z, dimension='height', line_color='green', line_width=1))
+    label = Label(x=z, y=1, text=f'{j}', text_align='right')  # Подписи
+    p.add_layout(label)
+
+# Вывод графика на экран (html откроется в браузере)
 show(p)

@@ -11,6 +11,8 @@ import optuna
 import math
 from torch.utils.data import random_split
 
+# В настоящем скрипте реализован подбор средствами Optuna количества слоев и их расположения,
+# но следует учесть, что для запуска кода потребуются значительные вычислительные мощности
 
 # Проверка доступности GPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
