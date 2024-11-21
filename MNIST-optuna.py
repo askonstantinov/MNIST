@@ -500,7 +500,7 @@ print(f'Количество pruned trials: {len(study.get_trials(deepcopy=False
 # обучение с наилучшими (определенными выше) параметрами
 print('#################### ФИНАЛЬНОЕ ОБУЧЕНИЕ без прунов (валидационный датасет включен в обучающий датасет)')
 # Фиксация необходимых ГП оптимизации (2), включая общие ГП
-number_epochs_final = 20
+number_epochs_final = 30
 learning_rate_final = 1e-3
 batch_size_final = 32
 
@@ -545,9 +545,9 @@ layer6_fc2_neurons = best_params['layer6_fc2_neurons']
 
 
 # Задаем модель нейросети в явном виде для финального обучения
-class PreOptunaNet(nn.Module):
+class OptunaNet(nn.Module):
     def __init__(self):
-        super(PreOptunaNet, self).__init__()
+        super(OptunaNet, self).__init__()
         self.layer1 = nn.Sequential(
             nn.Conv2d(1, layer1_conv2d_filter, kernel_size=layer1_conv2d_kernel, stride=1,
                       padding=int(layer1_conv2d_kernel / 2)),
@@ -589,7 +589,7 @@ class PreOptunaNet(nn.Module):
         return outout
 
 
-model = PreOptunaNet()
+model = OptunaNet()
 print('model =', model)  # Визуальная проверка
 
 model = model.to(device)  # Перенос модели на вычислитель (при наличии - на GPU, иначе - на CPU)
@@ -664,7 +664,7 @@ torch_input = torch.randn(1, 1, 28, 28, device=device)  # Генерируем �
 torch.onnx.export(
     model,  # Собственно модель
     (torch_input,),  # Инициализация графа вычислений случайными данными в нашей размерности
-    'output_onnx/PreOptunaNet.onnx',  # Расположение и наименование итогового файла onnx
+    'output_onnx/OptunaNet_0.onnx',  # Расположение и наименование итогового файла onnx
     input_names=['input'],
     output_names=['output'],
     dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}},  # Поддержка батчей различных размеров
@@ -672,10 +672,10 @@ torch.onnx.export(
 )
 
 # Сохранение обученной модели в формат .pt (это формат Python)
-torch.save(model.state_dict(),'output_pt/PreOptunaNet.pt')
+torch.save(model.state_dict(),'output_pt/OptunaNet_0.pt')
 
 # Отрисовка процесса обучения с графиками потерь (loss_list) и точности (acc_list)
-p = figure(y_axis_label='Loss', width=1700, y_range=(0, 1), title='PyTorch PreOptunaNet results')
+p = figure(y_axis_label='Loss', width=1700, y_range=(0, 1), title='PyTorch OptunaNet_0 results')
 p.extra_y_ranges = {'Accuracy': Range1d(start=0, end=100)}
 p.add_layout(LinearAxis(y_range_name='Accuracy', axis_label='Accuracy (%)'), 'right')
 p.line(np.arange(len(loss_list)), loss_list, legend_label='Train Loss', line_color='blue')
